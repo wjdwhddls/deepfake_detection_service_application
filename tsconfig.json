@@ -1,3 +1,17 @@
 {
-  "extends": "@react-native/typescript-config/tsconfig.json"
+  "$schema": "http://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    "target": "ESNext",        // 원하는 ECMAScript 버전으로 설정
+    "module": "Node16",       // 'Node16'으로 설정
+    "moduleResolution": "Node16",  // 'Node16'으로 설정
+    "jsx": "react-jsx",       // React 사용 시 JSX 설정
+    "strict": true,           // 엄격한 타입 체크
+    "esModuleInterop": true,  // ES 모듈과 호환성 지원
+    "skipLibCheck": true,     // 라이브러리 검사를 건너뜀
+    "forceConsistentCasingInFileNames": true, // 파일 이름의 일관성 유지
+    "customConditions": ["react-native", "react-native/upgrade"] // 추가적인 사용자 정의 조건
+  },
+  "include": ["src/**/*"],     // 포함할 디렉토리
+  "exclude": ["node_modules", "build"], // 제외할 디렉토리
+  "extends": "@react-native/typescript-config/tsconfig.json" // 이 줄을 여기에 올바르게 위치시킵니다.
 }
