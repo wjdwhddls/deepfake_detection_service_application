@@ -1,6 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 필요한 권한 선언 -->  
+    <uses-permission android:name="android.permission.INTERNET" />  
+    <!--<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />-->
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <!-- (Android 13 필요한 경우 READ_MEDIA_IMAGES 등 추가) -->  
 
     <application
       android:name=".MainApplication"
