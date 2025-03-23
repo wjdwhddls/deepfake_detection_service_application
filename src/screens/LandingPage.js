@@ -1,31 +1,32 @@
-// src/screens/LandingPage.js
-import React from 'react';
+import React, { Component } from 'react';
 import { View, StyleSheet } from 'react-native';
-import Header from '../components/Header';
-import WaveAnimation from '../components/WaveAnimation';
-import Button from '../components/Button';
+import LottieView from 'lottie-react-native'; // Lottie 애니메이션 라이브러리
 
-const LandingPage = () => {
-    const handleDetect = () => {
-        // Detect 버튼 클릭 시 동작할 함수
-        console.log('Detect Pressed');
-    };
-
-    return (
-        <View style={styles.container}>
-            <Header />
-            <WaveAnimation />
-            <Button title="DETECT" onPress={handleDetect} />
-        </View>
-    );
+class LandingPage extends Component {
+    render() {
+        return (
+            <View style={styles.container}>
+                <LottieView
+                    source={require('../assets/wave-animation.json')} // Lottie JSON 파일 경로
+                    autoPlay
+                    loop
+                    style={styles.animation}
+                />
+            </View>
+        );
+    }
 };
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#000',
-        alignItems: 'center',
         justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#000', // 배경색 검정
+    },
+    animation: {
+        width: 300,
+        height: 300, // 애니메이션 크기 설정
     },
 });
 
