@@ -1,19 +1,15 @@
-import React, { useState } from 'react';  
-import { View, StyleSheet, TouchableOpacity, Text, Platform, Alert } from 'react-native';  
-import { pick } from '@react-native-documents/picker';  
-import { request, PERMISSIONS, RESULTS } from 'react-native-permissions';  
-import axios from 'axios';  
-import Header from '../components/Header';  
-import WaveAnimation from '../components/WaveAnimation';  
-import Button from '../components/Button';  
+import React, { useState } from 'react';  // useRef, useEffect 사용하지 않음
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform } from 'react-native';
+import { pick } from '@react-native-documents/picker';
+import { request, PERMISSIONS, RESULTS } from 'react-native-permissions';
 
-const LandingPage = () => {  
-  const [showUploadButton, setShowUploadButton] = useState(false);  
+const HomeScreen = () => {
+  const [showUploadButton, setShowUploadButton] = useState(false);
 
-  const handleDetect = () => {  
-    setShowUploadButton((prev) => !prev);  
-    console.log('Detect Pressed');  
-  };  
+  const handleDetect = () => {
+    setShowUploadButton((prev) => !prev);
+    console.log('Detect Pressed');
+  };
 
   const handleUpload = async () => {  
     try {  
@@ -42,7 +38,7 @@ const LandingPage = () => {
       }  
 
       // 파일 선택  
-      const [pickResult] = await pick({ mode: 'import' });  
+      const pickResult = await pick({ mode: 'import' });  
       if (!pickResult) {  
         console.log('파일 선택이 취소되었습니다.');  
         return;  
@@ -82,40 +78,51 @@ const LandingPage = () => {
       }  
       Alert.alert('오류', '파일 선택 또는 업로드 중 오류가 발생했습니다.');  
     }  
-  };  
+  };
 
-  return (  
-    <View style={styles.container}>  
-      <Header />  
-      <WaveAnimation />  
-      <Button title="DETECT" onPress={handleDetect} />  
-      {showUploadButton && (  
-        <TouchableOpacity style={styles.uploadButton} onPress={handleUpload}>  
-          <Text style={styles.uploadButtonText}>UPLOAD FILE</Text>  
-        </TouchableOpacity>  
-      )}  
-    </View>  
-  );  
-};  
+  return (
+    <View style={styles.container}>
+      <TouchableOpacity style={styles.detectButton} onPress={handleDetect}>
+        <Text style={styles.detectButtonText}>DETECT</Text>
+      </TouchableOpacity>
+      {showUploadButton && (
+        <TouchableOpacity style={styles.uploadButton} onPress={handleUpload}>
+          <Text style={styles.uploadButtonText}>UPLOAD FILE</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+};
 
-const styles = StyleSheet.create({  
-  container: {  
-    flex: 1,  
-    backgroundColor: '#000',  
-    alignItems: 'center',  
-    justifyContent: 'center',  
-  },  
-  uploadButton: {  
-    marginTop: 20,  
-    padding: 10,  
-    backgroundColor: '#fff',  
-    borderRadius: 5,  
-  },  
-  uploadButtonText: {  
-    color: '#000',  
-    fontWeight: 'bold',  
-  },  
-});  
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#000',
+  },
+  uploadButton: {
+    marginTop: 20,
+    padding: 10,
+    backgroundColor: '#fff',
+    borderRadius: 5,
+  },
+  uploadButtonText: {
+    color: '#000',
+    fontWeight: 'bold',
+  },
+  detectButton: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 30,
+    marginBottom: 20,
+  },
+  detectButtonText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#000',
+  },
+});
 
-export default LandingPage;  
-
+export default HomeScreen;
