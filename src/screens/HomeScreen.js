@@ -2,6 +2,7 @@ import React, { useState } from 'react';  // useRef, useEffect 사용하지 않�
 import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform } from 'react-native';
 import { pick } from '@react-native-documents/picker';
 import { request, PERMISSIONS, RESULTS } from 'react-native-permissions';
+import axios from 'axios';  
 
 const HomeScreen = () => {
   const [showUploadButton, setShowUploadButton] = useState(false);
@@ -38,7 +39,7 @@ const HomeScreen = () => {
       }  
 
       // 파일 선택  
-      const pickResult = await pick({ mode: 'import' });  
+      const [pickResult] = await pick({ mode: 'import' });  
       if (!pickResult) {  
         console.log('파일 선택이 취소되었습니다.');  
         return;  
