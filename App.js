@@ -1,11 +1,11 @@
-// App.js
-import React, { useState } from 'react'; // useState를 import
+import React, { useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Icon from 'react-native-vector-icons/Ionicons';
 import HomeScreen from './src/screens/HomeScreen';
 import ChatScreen from './src/screens/ChatScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
+import NotificationSettingsScreen from './src/screens/NotificationSettingsScreen'; 
 import LoginScreen from './src/screens/LoginScreen'; 
 import SignUpScreen from './src/screens/SignUpScreen'; 
 import { createStackNavigator } from '@react-navigation/stack';
@@ -13,8 +13,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
-// MainTabNavigator 을 컴포넌트로 분리
-const MainTabNavigator = ({ isLoggedIn }) => {
+const MainTabNavigator = () => {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -36,50 +35,42 @@ const MainTabNavigator = ({ isLoggedIn }) => {
         tabBarStyle: { backgroundColor: '#333333' },
       })}
     >
-      <Tab.Screen name="Home" component={HomeScreen} />
+      <Tab.Screen 
+        name="Home" 
+        component={HomeScreen} 
+        options={{ headerShown: false }} 
+      />
       <Tab.Screen 
         name="Chat" 
-        component={ChatScreen}
-        listeners={({ navigation }) => ({
-          tabPress: (e) => {
-            if (!isLoggedIn) {
-              e.preventDefault();
-              navigation.navigate('Login');
-            }
-          },
-        })} 
+        component={ChatScreen} 
+        options={{ headerShown: false }} 
       />
       <Tab.Screen 
         name="Profile" 
-        component={ProfileScreen} 
-        listeners={({ navigation }) => ({
-          tabPress: (e) => {
-            if (!isLoggedIn) {
-              e.preventDefault();
-              navigation.navigate('Login');
-            }
-          },
-        })} 
+        component={ProfileStack} // 프로필 스택으로 변경
+        options={{ headerShown: false }} 
       />
     </Tab.Navigator>
   );
 };
 
+// 프로필 스택과 알림 설정을 포함하는 스택 내비게이터
+const ProfileStack = () => {
+  return (
+    <Stack.Navigator>
+      <Stack.Screen name="Profile" component={ProfileScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="NotificationSettings" component={NotificationSettingsScreen} options={{ headerShown: false }} />
+    </Stack.Navigator>
+  );
+};
+
 const App = () => {
-  const [isLoggedIn, setIsLoggedIn] = useState(false); // useState로 로그인 상태 관리
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   return (
     <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {/* MainTabNavigator 컴포넌트로 사용 */}
-        <Stack.Screen name="Main">
-          {() => <MainTabNavigator isLoggedIn={isLoggedIn} />}
-        </Stack.Screen>
-        <Stack.Screen name="Login">
-          {(props) => <LoginScreen {...props} setIsLoggedIn={setIsLoggedIn} />}
-        </Stack.Screen>
-        <Stack.Screen name="SignUp" component={SignUpScreen} />
-      </Stack.Navigator>
+      <MainTabNavigator />
+      {/* 여기에 로그인 등 다른 스크린을 위한 내비게이터를 필요에 따라 추가할 수 있습니다. */}
     </NavigationContainer>
   );
 };
