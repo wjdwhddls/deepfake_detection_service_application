@@ -21,6 +21,8 @@
     "react-dom": "^19.0.0",
     "react-native": "0.78.0",
     "react-native-animatable": "^1.4.0",
+    "react-native-audio": "^4.3.0",
+    "react-native-call-detection": "^1.9.0",
     "react-native-file-picker": "^0.0.21",
     "react-native-gesture-handler": "^2.24.0",
     "react-native-paper": "^5.13.1",
