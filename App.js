@@ -59,18 +59,33 @@ const ProfileStack = () => {
   return (
     <Stack.Navigator>
       <Stack.Screen name="Profile" component={ProfileScreen} options={{ headerShown: false }} />
-      <Stack.Screen name="NotificationSettings" component={NotificationSettingsScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="NotificationSettings" component={NotificationSettingsScreen} options={{ headerShown: true }} />
+    </Stack.Navigator>
+  );
+};
+
+// 로그인 및 회원가입 스택 내비게이터
+const AuthStack = ({ setIsLoggedIn }) => {
+  return (
+    <Stack.Navigator>
+      <Stack.Screen name="Login">
+        {(props) => <LoginScreen {...props} setIsLoggedIn={setIsLoggedIn} />}
+      </Stack.Screen>
+      <Stack.Screen name="SignUp" component={SignUpScreen} />
     </Stack.Navigator>
   );
 };
 
 const App = () => {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false); // 기본적으로 로그인 상태를 false로 설정합니다.
 
   return (
     <NavigationContainer>
-      <MainTabNavigator />
-      {/* 여기에 로그인 등 다른 스크린을 위한 내비게이터를 필요에 따라 추가할 수 있습니다. */}
+      {isLoggedIn ? (
+        <MainTabNavigator /> // 로그인된 경우 탭 내비게이터를 렌더링
+      ) : (
+        <AuthStack setIsLoggedIn={setIsLoggedIn} /> // 로그인하지 않은 경우 로그인 스택을 렌더링
+      )}
     </NavigationContainer>
   );
 };

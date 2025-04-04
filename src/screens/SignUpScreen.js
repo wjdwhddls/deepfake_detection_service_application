@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
-import { Picker } from '@react-native-picker/picker'; // 올바른 import
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 
 const SignUpScreen = ({ navigation }) => {
   const [name, setName] = useState('');
@@ -10,13 +9,23 @@ const SignUpScreen = ({ navigation }) => {
   const [gender, setGender] = useState('male'); // 성별 상태 추가
 
   const handleSignUp = () => {
-    // 회원가입 로직 추가 필요
+    if (!name || !email || !password || !confirmPassword) {
+      Alert.alert("오류", "모든 필드를 입력하세요."); // 빈 필드에 대한 경고
+      return;
+    }
+    if (password !== confirmPassword) {
+      Alert.alert("오류", "비밀번호가 일치하지 않습니다."); // 비밀번호 불일치 검사
+      return;
+    }
+
     console.log('회원가입 진행:', { name, email, password, confirmPassword, gender });
+    // 회원가입 로직 추가 필요
   };
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Let’s Catch The Fake!</Text>
+
       <TextInput
         style={styles.input}
         placeholder="이름"
@@ -49,20 +58,29 @@ const SignUpScreen = ({ navigation }) => {
       />
       
       <Text style={styles.genderLabel}>성별</Text>
-      <Picker
-        selectedValue={gender}
-        style={styles.picker}
-        onValueChange={(itemValue) => setGender(itemValue)}
-      >
-        <Picker.Item label="남" value="male" />
-        <Picker.Item label="여" value="female" />
-      </Picker>
+      <View style={styles.genderContainer}>
+        <TouchableOpacity style={styles.genderOption} onPress={() => setGender('male')}>
+          <Text style={styles.genderText}>남</Text>
+          {gender === 'male' && <View style={styles.radioButtonChecked} />}
+          {gender !== 'male' && <View style={styles.radioButton} />}
+        </TouchableOpacity>
+
+        <View style={styles.genderSpacer} /> {/* Space between gender options */}
+
+        <TouchableOpacity style={styles.genderOption} onPress={() => setGender('female')}>
+          <Text style={styles.genderText}>여</Text>
+          {gender === 'female' && <View style={styles.radioButtonChecked} />}
+          {gender !== 'female' && <View style={styles.radioButton} />}
+        </TouchableOpacity>
+      </View>
 
       <TouchableOpacity style={styles.registerButton} onPress={handleSignUp}>
         <Text style={styles.registerButtonText}>회원 가입</Text>
       </TouchableOpacity>
+
       <Text style={styles.footerText}>
-        이미 계정이 있으신가요? <Text onPress={() => navigation.navigate('Login')} style={styles.linkText}>로그인</Text>
+        이미 계정이 있으신가요? 
+        <Text onPress={() => navigation.navigate('Login')} style={styles.linkText}> 로그인</Text>
       </Text>
     </View>
   );
@@ -102,15 +120,41 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     marginBottom: 5,
   },
-  picker: {
-    height: 50,
+  genderContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     width: '100%',
-    backgroundColor: '#222',
+    justifyContent: 'space-between',
+    marginBottom: 15,
+  },
+  genderOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
+  },
+  genderText: {
     color: '#FFF',
+    marginRight: 10,
+  },
+  genderSpacer: {
+    width: 10,  // Space between options
+  },
+  radioButton: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     borderColor: '#A9A9A9',
     borderWidth: 1,
+    backgroundColor: '#222',
+  },
+  radioButtonChecked: {
+    width: 20,
+    height: 20,
     borderRadius: 10,
-    marginBottom: 15,
+    borderColor: '#A9A9A9',
+    borderWidth: 1,
+    backgroundColor: '#DB4437', // 체크 시 색상
   },
   registerButton: {
     height: 55,
