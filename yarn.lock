@@ -5896,6 +5896,16 @@ react-native-animatable@^1.4.0:
   dependencies:
     prop-types "^15.8.1"
 
+react-native-audio@^4.3.0:
+  version "4.3.0"
+  resolved "https://registry.npmjs.org/react-native-audio/-/react-native-audio-4.3.0.tgz"
+  integrity sha512-QQYq28eSJy+y/Ukvry0AkbwMVELAj+LcEwCVRH+7sKLqlnoBBxGd4ilhgJHjwOiC70192LueGbjXJjPPEwW3iA==
+
+react-native-call-detection@^1.9.0:
+  version "1.9.0"
+  resolved "https://registry.npmjs.org/react-native-call-detection/-/react-native-call-detection-1.9.0.tgz"
+  integrity sha512-UaF/I1cp2UnIbdCh3UmrFIA4an8El1gIBM6uIbM+OYCrfe5btIj7DYtjqtNoeKOtF7fap32m37v6lafQ9SZHpg==
+
 react-native-file-picker@^0.0.21:
   version "0.0.21"
   resolved "https://registry.npmjs.org/react-native-file-picker/-/react-native-file-picker-0.0.21.tgz"
@@ -5982,7 +5992,7 @@ react-native-vector-icons@*, react-native-vector-icons@^10.2.0:
     prop-types "^15.7.2"
     yargs "^16.1.1"
 
-react-native@*, react-native@>=0.46, react-native@>=0.70.0, react-native@>=0.73.0, react-native@0.78.0:
+react-native@*, react-native@>=0.26.0, react-native@>=0.46, react-native@>=0.70.0, react-native@>=0.73.0, react-native@0.78.0:
   version "0.78.0"
   resolved "https://registry.npmjs.org/react-native/-/react-native-0.78.0.tgz"
   integrity sha512-3PO4tNvCN6BdAKcoY70v1sLfxYCmDR4KS1VTY+kIBKy5Qznp27QNxL7zBQjvS6Jp91gc8N82QbysQrfBlwg9gQ==
