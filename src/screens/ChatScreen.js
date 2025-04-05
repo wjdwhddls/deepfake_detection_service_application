@@ -9,7 +9,7 @@ const BoardScreen = () => {
   // 게시글 목록을 불러오는 함수
   const fetchPosts = async () => {
     try {
-      const response = await axios.get('YOUR_API_ENDPOINT/posts'); // 실제 API 엔드포인트로 변경 필요
+      const response = await axios.get('api/dashboard'); // 실제 API 엔드포인트로 변경 필요
       setPosts(response.data);
       setLoading(false);
     } catch (error) {
