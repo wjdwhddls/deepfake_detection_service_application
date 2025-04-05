@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Switch, ScrollView, TouchableOpacity } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import Icon from 'react-native-vector-icons/Ionicons'; // react-native-vector-icons에서 아이콘을 임포트
+import Icon from 'react-native-vector-icons/Ionicons';
 
 const NotificationSettingsScreen = () => {
   const navigation = useNavigation();
@@ -20,7 +20,7 @@ const NotificationSettingsScreen = () => {
     <ScrollView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Icon name="arrow-back" size={24} color="#007AFF" />
+          <Icon name="arrow-back" size={20} color="#FFFFFF" /> 
         </TouchableOpacity>
         <Text style={styles.title}>알림 설정</Text>
       </View>
@@ -121,7 +121,9 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-start',
+    justifyContent: 'center-start',
+    marginBottom: 30, // 헤더와 내용 간격 추가
+    marginTop: 40,     // 헤더 위 간격 추가
   },
   backButton: {
     marginRight: 10,
@@ -129,9 +131,8 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     color: '#FFF',
-    marginBottom: 20,
-    textAlign: 'center', // 제목 중앙 정렬
-    flex: 1, // 제목 정렬을 위해 추가
+    textAlign: 'center',
+    flex: 1,
   },
   section: {
     marginBottom: 20,
@@ -140,7 +141,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#FFF',
     marginBottom: 10,
-    textAlign: 'left', // 왼쪽 정렬
   },
   switchContainer: {
     flexDirection: 'row',
@@ -155,7 +155,7 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 16,
     flex: 1,
-    textAlign: 'left', // 왼쪽 정렬
+    textAlign: 'left',
   },
 });
 

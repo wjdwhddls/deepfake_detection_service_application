@@ -9,6 +9,7 @@ import NotificationSettingsScreen from './src/screens/NotificationSettingsScreen
 import LoginScreen from './src/screens/LoginScreen'; 
 import SignUpScreen from './src/screens/SignUpScreen'; 
 import { createStackNavigator } from '@react-navigation/stack';
+import ProfileEditScreen from './src/screens/ProfileEditScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -47,7 +48,7 @@ const MainTabNavigator = () => {
       />
       <Tab.Screen 
         name="Profile" 
-        component={ProfileStack} // 프로필 스택으로 변경
+        component={ProfileStack} 
         options={{ headerShown: false }} 
       />
     </Tab.Navigator>
@@ -59,7 +60,8 @@ const ProfileStack = () => {
   return (
     <Stack.Navigator>
       <Stack.Screen name="Profile" component={ProfileScreen} options={{ headerShown: false }} />
-      <Stack.Screen name="NotificationSettings" component={NotificationSettingsScreen} options={{ headerShown: true }} />
+      <Stack.Screen name="NotificationSettings" component={NotificationSettingsScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="ProfileEdit" component={ProfileEditScreen} options={{ headerShown: false }} /> 
     </Stack.Navigator>
   );
 };
