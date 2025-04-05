@@ -8,15 +8,14 @@ const ProfileEditScreen = () => {
 
     return (
         <View style={styles.container}>
-            <View style={styles.headerContainer}>
+            <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                     <Icon name="arrow-back" size={24} color="#FFFFFF" />
                 </TouchableOpacity>
-                <Text style={styles.header}>프로필 수정</Text>
+                <Text style={styles.title}>프로필 수정</Text>
             </View>
 
-            {/* 헤더와 입력 필드 간의 간격 추가 */}
-            <View style={styles.separator} />
+            <View style={styles.separator} /> {/* 헤더와 입력 필드 간의 간격 추가 */}
 
             <TextInput
                 style={styles.input}
@@ -63,25 +62,24 @@ const styles = StyleSheet.create({
         backgroundColor: '#000',
         padding: 20,
     },
-    headerContainer: {
+    header: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center', // 중앙 정렬
-        marginBottom: 10, // 헤더와 내용 간격 조정
+        justifyContent: 'flex-start', // 왼쪽 정렬
+        marginBottom: 30, // 헤더와 내용 간격 추가
+        marginTop: 40,     // 헤더 위 간격 추가
     },
     backButton: {
-        position: 'absolute', // 절대 위치를 사용하여 버튼을 왼쪽에 고정
-        left: 15, // 왼쪽 여백 추가
-        zIndex: 1, // 버튼을 다른 요소 위로 올리기 위해 zIndex 추가
+        marginRight: 10,
     },
-    header: {
+    title: {
         fontSize: 24,
-        color: '#fff',
+        color: '#FFF',
+        textAlign: 'center',
         flex: 1,
-        textAlign: 'center', // 중앙 정렬
     },
     separator: {
-        height: 20, // 헤더와 입력 필드 간의 간격을 위한 뷰
+        height: 30, // 헤더와 입력 필드 간의 간격을 위한 뷰
     },
     input: {
         height: 50,
