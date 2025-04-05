@@ -10,6 +10,9 @@ import LoginScreen from './src/screens/LoginScreen';
 import SignUpScreen from './src/screens/SignUpScreen'; 
 import { createStackNavigator } from '@react-navigation/stack';
 import ProfileEditScreen from './src/screens/ProfileEditScreen';
+import InfoScreen from './src/screens/InfoScreen';
+import FAQScreen from './src/screens/FAQScreen';
+import PrivacyPolicyScreen from './src/screens/PrivacyPolicyScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -62,6 +65,9 @@ const ProfileStack = () => {
       <Stack.Screen name="Profile" component={ProfileScreen} options={{ headerShown: false }} />
       <Stack.Screen name="NotificationSettings" component={NotificationSettingsScreen} options={{ headerShown: false }} />
       <Stack.Screen name="ProfileEdit" component={ProfileEditScreen} options={{ headerShown: false }} /> 
+      <Stack.Screen name="Info" component={InfoScreen} options={{ headerShown: false }} /> 
+      <Stack.Screen name="FAQ" component={FAQScreen} options={{ headerShown: false }} /> 
+      <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} options={{ headerShown: false }} /> 
     </Stack.Navigator>
   );
 };
