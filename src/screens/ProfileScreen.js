@@ -24,7 +24,7 @@ const ProfileScreen = ({ navigation }) => {
         {/* 알림 설정 버튼 */}
         <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('NotificationSettings')}>
           <Text style={styles.menuText}>알림 설정</Text>
-          <Text style={styles.indicator}>커짐</Text>
+          <Text style={styles.indicator}>켜짐</Text>
         </TouchableOpacity>
 
         {/* 라이트 모드 / 다크 모드 스위치 */}
@@ -41,25 +41,27 @@ const ProfileScreen = ({ navigation }) => {
 
       <View style={styles.section}>
         {/* 탐지 기록 버튼 */}
-        <TouchableOpacity style={styles.menuItem}>
+        <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('DetectionHistory')}>
           <Text style={styles.menuText}>탐지 기록</Text>
         </TouchableOpacity>
 
         {/* 내가 게시한 글 버튼 */}
-        <TouchableOpacity style={styles.menuItem}>
+        <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('MyPosts')}>
           <Text style={styles.menuText}>내가 게시한 글</Text>
         </TouchableOpacity>
       </View>
 
       <View style={styles.section}>
         {/* 추가 정보 버튼 */}
-        <TouchableOpacity style={styles.menuItem}>
+        <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Info')}>
           <Text style={styles.menuText}>정보</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.menuItem}>
+        {/* 자주 묻는 질문 버튼 */}
+        <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('FAQ')}>
           <Text style={styles.menuText}>자주 묻는 질문</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.menuItem}>
+        {/* 개인정보 처리방침 버튼 */}
+        <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('PrivacyPolicy')}>
           <Text style={styles.menuText}>개인정보 처리방침</Text>
         </TouchableOpacity>
       </View>

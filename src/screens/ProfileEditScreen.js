@@ -87,7 +87,7 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderRadius: 10,
         paddingHorizontal: 10,
-        marginBottom: 15, // 텍스트 박스 간격
+        marginBottom: 30, // 텍스트 박스 간격
         color: '#fff',
         backgroundColor: '#333',
     },
