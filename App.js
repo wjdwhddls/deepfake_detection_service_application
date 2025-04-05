@@ -77,7 +77,7 @@ const AuthStack = ({ setIsLoggedIn }) => {
 };
 
 const App = () => {
-  const [isLoggedIn, setIsLoggedIn] = useState(false); // 기본적으로 로그인 상태를 false로 설정합니다.
+  const [isLoggedIn, setIsLoggedIn] = useState(true); // 기본적으로 로그인 상태를 false로 설정합니다.
 
   return (
     <NavigationContainer>
