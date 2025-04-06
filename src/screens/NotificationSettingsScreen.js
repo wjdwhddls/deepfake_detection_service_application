@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Switch, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect } from 'react'; // useEffect 추가  
+import { View, Text, StyleSheet, Switch, ScrollView, TouchableOpacity, PermissionsAndroid, Alert, Linking } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useTheme } from '../contexts/ThemeContext'; // useTheme 훅 import 추가
@@ -9,7 +9,7 @@ const NotificationSettingsScreen = () => {
   const { isLightMode } = useTheme(); // 현재 테마 정보 가져오기
 
   // 스위치 상태를 관리하기 위한 상태변수 추가
-  const [isCallDetection, setIsCallDetection] = useState(true);
+  const [isCallDetection, setIsCallDetection] = useState(false);
   const [isNotificationEnabled, setIsNotificationEnabled] = useState(false);
   const [isSoundEnabled, setIsSoundEnabled] = useState(true);
   const [isVibrationEnabled, setIsVibrationEnabled] = useState(true);
@@ -17,6 +17,41 @@ const NotificationSettingsScreen = () => {
   const [isPromotionEnabled, setIsPromotionEnabled] = useState(true);
   const [isNewServiceEnabled, setIsNewServiceEnabled] = useState(false);
   const [isNewTeamEnabled, setIsNewTeamEnabled] = useState(true);
+
+  // 권한 요청 함수  
+  const requestCallPermission = async () => {  
+    console.log("Requesting call permission...");
+    if (Platform.OS === 'android') {  
+      const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.READ_PHONE_STATE);  
+      console.log('Permission granted:', granted);
+      if (granted === PermissionsAndroid.RESULTS.GRANTED) {  
+        console.log('전화 상태 권한이 허가되었습니다');  
+      } else {  
+        Alert.alert('권한 필요', '통화 감지를 사용하기 위해 전화 상태 권한이 필요합니다.');  
+        setIsCallDetection(false); // 권한 거부 시 스위치를 비활성화  
+      }  
+    }  
+  };  
+
+  useEffect(() => {  
+    if (isCallDetection) {  
+      requestCallPermission();  
+    }  
+  }, [isCallDetection]);
+
+  const handleCallDetectionToggle = (value) => {  
+    if (value) {  
+      console.log('Switch toggled: ', value);  
+      setIsCallDetection(value);  
+    } else {  
+      Alert.alert(  
+        '권한 해제',  
+        '통화 감지 기능을 비활성화하면 전화 상태 권한이 해제됩니다. 설정에서 권한을 확인하세요.',  
+        [{ text: '확인' }]  
+      );  
+      setIsCallDetection(value);  
+    }  
+  };  
 
   return (
     <ScrollView style={styles.container(isLightMode)}>
@@ -33,7 +68,7 @@ const NotificationSettingsScreen = () => {
           <Text style={styles.switchLabel(isLightMode)}>통화 감지 시 백그라운드 실행 및 진동 알림</Text>
           <Switch
             value={isCallDetection}
-            onValueChange={setIsCallDetection}
+            onValueChange={handleCallDetectionToggle}  
             thumbColor={isCallDetection ? "#FFF" : "#000"}
             trackColor={{ false: "#767577", true: "#81b0ff" }}
           />
