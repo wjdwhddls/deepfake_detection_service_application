@@ -16,7 +16,7 @@ const LoginScreen = ({ setIsLoggedIn }) => {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Let’s Catch The Fake!</Text>
-      
+
       <TextInput
         style={styles.input}
         placeholder="이메일"
@@ -50,8 +50,11 @@ const LoginScreen = ({ setIsLoggedIn }) => {
       <TouchableOpacity onPress={() => navigation.navigate('SignUp')}>
         <Text style={styles.footerText}>아직 계정이 없으신가요? 회원가입</Text>
       </TouchableOpacity>
-      
-      <Text style={styles.footerText}>비밀번호를 잊으셨나요?</Text>
+
+      <TouchableOpacity onPress={() => navigation.navigate('PasswordRecovery')}>
+        <Text style={styles.footerText}>비밀번호를 잊으셨나요? 비밀번호 찾기</Text>
+      </TouchableOpacity>
+
     </View>
   );
 };
