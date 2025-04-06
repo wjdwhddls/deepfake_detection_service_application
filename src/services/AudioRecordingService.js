@@ -8,7 +8,7 @@
 //             Channels: 1,  
 //             AudioQuality: 'High',  
 //             AudioEncoding: 'm4a', // 인코딩 형식을 m4a로 변경  
-//         });  
+//         });  %
 //         await AudioRecorder.startRecording();  
 //         console.log('Recording started...');  
 //     }  
