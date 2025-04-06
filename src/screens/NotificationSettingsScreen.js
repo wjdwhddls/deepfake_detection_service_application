@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react'; // useEffect 추가
 import { View, Text, StyleSheet, Switch, ScrollView, TouchableOpacity, PermissionsAndroid, Alert, Linking } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Ionicons';
+import { useTheme } from '../contexts/ThemeContext'; // useTheme 훅 import 추가
 
 const NotificationSettingsScreen = () => {
   const navigation = useNavigation();
+  const { isLightMode } = useTheme(); // 현재 테마 정보 가져오기
 
   // 스위치 상태를 관리하기 위한 상태변수 추가
   const [isCallDetection, setIsCallDetection] = useState(false);
@@ -52,18 +54,18 @@ const NotificationSettingsScreen = () => {
   };  
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={styles.container(isLightMode)}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Icon name="arrow-back" size={20} color="#FFFFFF" /> 
         </TouchableOpacity>
-        <Text style={styles.title}>알림 설정</Text>
+        <Text style={styles.title(isLightMode)}>알림 설정</Text>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>일반 설정</Text>
-        <View style={styles.switchContainer}>
-          <Text style={styles.switchLabel}>통화 감지 시 백그라운드 실행 및 진동 알림</Text>
+        <Text style={styles.sectionTitle(isLightMode)}>일반 설정</Text>
+        <View style={styles.switchContainer(isLightMode)}>
+          <Text style={styles.switchLabel(isLightMode)}>통화 감지 시 백그라운드 실행 및 진동 알림</Text>
           <Switch
             value={isCallDetection}
             onValueChange={handleCallDetectionToggle}  
@@ -71,8 +73,8 @@ const NotificationSettingsScreen = () => {
             trackColor={{ false: "#767577", true: "#81b0ff" }}
           />
         </View>
-        <View style={styles.switchContainer}>
-          <Text style={styles.switchLabel}>알림</Text>
+        <View style={styles.switchContainer(isLightMode)}>
+          <Text style={styles.switchLabel(isLightMode)}>알림</Text>
           <Switch
             value={isNotificationEnabled}
             onValueChange={setIsNotificationEnabled}
@@ -80,8 +82,8 @@ const NotificationSettingsScreen = () => {
             trackColor={{ false: "#767577", true: "#81b0ff" }}
           />
         </View>
-        <View style={styles.switchContainer}>
-          <Text style={styles.switchLabel}>소리</Text>
+        <View style={styles.switchContainer(isLightMode)}>
+          <Text style={styles.switchLabel(isLightMode)}>소리</Text>
           <Switch
             value={isSoundEnabled}
             onValueChange={setIsSoundEnabled}
@@ -89,8 +91,8 @@ const NotificationSettingsScreen = () => {
             trackColor={{ false: "#767577", true: "#81b0ff" }}
           />
         </View>
-        <View style={styles.switchContainer}>
-          <Text style={styles.switchLabel}>진동</Text>
+        <View style={styles.switchContainer(isLightMode)}>
+          <Text style={styles.switchLabel(isLightMode)}>진동</Text>
           <Switch
             value={isVibrationEnabled}
             onValueChange={setIsVibrationEnabled}
@@ -101,9 +103,9 @@ const NotificationSettingsScreen = () => {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>시스템 및 서비스 업데이트</Text>
-        <View style={styles.switchContainer}>
-          <Text style={styles.switchLabel}>앱 자동 업데이트</Text>
+        <Text style={styles.sectionTitle(isLightMode)}>시스템 및 서비스 업데이트</Text>
+        <View style={styles.switchContainer(isLightMode)}>
+          <Text style={styles.switchLabel(isLightMode)}>앱 자동 업데이트</Text>
           <Switch
             value={isAutoUpdateEnabled}
             onValueChange={setIsAutoUpdateEnabled}
@@ -111,8 +113,8 @@ const NotificationSettingsScreen = () => {
             trackColor={{ false: "#767577", true: "#81b0ff" }}
           />
         </View>
-        <View style={styles.switchContainer}>
-          <Text style={styles.switchLabel}>프로모션</Text>
+        <View style={styles.switchContainer(isLightMode)}>
+          <Text style={styles.switchLabel(isLightMode)}>프로모션</Text>
           <Switch
             value={isPromotionEnabled}
             onValueChange={setIsPromotionEnabled}
@@ -123,9 +125,9 @@ const NotificationSettingsScreen = () => {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>기타</Text>
-        <View style={styles.switchContainer}>
-          <Text style={styles.switchLabel}>새로운 서비스 제공</Text>
+        <Text style={styles.sectionTitle(isLightMode)}>기타</Text>
+        <View style={styles.switchContainer(isLightMode)}>
+          <Text style={styles.switchLabel(isLightMode)}>새로운 서비스 제공</Text>
           <Switch
             value={isNewServiceEnabled}
             onValueChange={setIsNewServiceEnabled}
@@ -133,8 +135,8 @@ const NotificationSettingsScreen = () => {
             trackColor={{ false: "#767577", true: "#81b0ff" }}
           />
         </View>
-        <View style={styles.switchContainer}>
-          <Text style={styles.switchLabel}>새로운 팀 제공</Text>
+        <View style={styles.switchContainer(isLightMode)}>
+          <Text style={styles.switchLabel(isLightMode)}>새로운 팀 제공</Text>
           <Switch
             value={isNewTeamEnabled}
             onValueChange={setIsNewTeamEnabled}
@@ -147,51 +149,52 @@ const NotificationSettingsScreen = () => {
   );
 };
 
+// 스타일 업데이트 (테마를 동적으로 적용)
 const styles = StyleSheet.create({
-  container: {
+  container: (isLightMode) => ({
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: isLightMode ? '#FFF' : '#000', // 배경색
     padding: 20,
-  },
+  }),
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center-start',
-    marginBottom: 30, // 헤더와 내용 간격 추가
-    marginTop: 40,     // 헤더 위 간격 추가
+    justifyContent: 'flex-start',
+    marginBottom: 30,
+    marginTop: 40,
   },
   backButton: {
     marginRight: 10,
   },
-  title: {
+  title: (isLightMode) => ({
     fontSize: 24,
-    color: '#FFF',
+    color: isLightMode ? '#000' : '#FFF', // 제목 색상을 라이트 모드일 때 검정색으로
     textAlign: 'center',
     flex: 1,
-  },
+  }),
   section: {
     marginBottom: 20,
   },
-  sectionTitle: {
+  sectionTitle: (isLightMode) => ({
     fontSize: 18,
-    color: '#FFF',
+    color: isLightMode ? '#000' : '#FFF', // 제목 색상
     marginBottom: 10,
-  },
-  switchContainer: {
+  }),
+  switchContainer: (isLightMode) => ({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginVertical: 10,
-    backgroundColor: '#1f1f1f',
+    backgroundColor: isLightMode ? '#EEE' : '#1f1f1f', // 카드 배경색
     padding: 15,
     borderRadius: 10,
-  },
-  switchLabel: {
-    color: '#FFF',
+  }),
+  switchLabel: (isLightMode) => ({
+    color: isLightMode ? '#000' : '#FFF', // 라이트 모드일 때 글씨 색깔을 검정색으로
     fontSize: 16,
     flex: 1,
     textAlign: 'left',
-  },
+  }),
 });
 
 export default NotificationSettingsScreen;
