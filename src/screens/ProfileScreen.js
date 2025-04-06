@@ -92,6 +92,12 @@ const ProfileScreen = () => {
           onPress={() => navigation.navigate('PrivacyPolicy')}
           styles={styles}
         />
+
+        <TouchableMenuItem
+        text="로그아웃"
+        onPress={() => navigation.navigate('Login')}
+        styles={styles}
+        />
       </View>
     </ScrollView>
   );

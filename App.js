@@ -16,6 +16,7 @@ import PrivacyPolicyScreen from './src/screens/PrivacyPolicyScreen';
 import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';  // useTheme 훅을 추가
 import PasswordRecoveryScreen from './src/screens/PasswordRecoveryScreen';
 import PasswordChangeScreen from './src/screens/PasswordChangeScreen';
+import LogoutScreen from './src/screens/LogoutScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -30,6 +31,7 @@ const ProfileStack = () => {
       <Stack.Screen name="Info" component={InfoScreen} />
       <Stack.Screen name="FAQ" component={FAQScreen} />
       <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
+      <Stack.Screen name="Logout" component={LogoutScreen} />
     </Stack.Navigator>
   );
 };
