@@ -90,7 +90,7 @@ const AuthStack = ({ setIsLoggedIn }) => {
 };
 
 const App = () => {
-  const [isLoggedIn, setIsLoggedIn] = useState(true);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   return (
     <ThemeProvider>
