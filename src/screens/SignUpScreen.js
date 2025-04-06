@@ -154,13 +154,13 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderColor: '#A9A9A9',
     borderWidth: 1,
-    backgroundColor: '#DB4437', // 체크 시 색상
+    backgroundColor: '#007AFF', // 체크 시 색상
   },
   registerButton: {
     height: 55,
     width: '100%',
     borderRadius: 10,
-    backgroundColor: '#DB4437',
+    backgroundColor: '#007AFF',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 15,
@@ -175,7 +175,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   linkText: {
-    color: '#DB4437',
+    color: '#007AFF',
   },
 });
 
