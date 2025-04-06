@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
+import { useTheme } from '../contexts/ThemeContext'; // 테마 컨텍스트 추가
 
 const FAQScreen = ({ navigation }) => {
-    const [expandedQuestionIndex, setExpandedQuestionIndex] = useState(null); // 클릭된 질문 인덱스 저장
+    const [expandedQuestionIndex, setExpandedQuestionIndex] = useState(null);
+    const { isLightMode } = useTheme(); // 테마 상태 가져오기
+    const styles = getStyles(isLightMode); // 동적 스타일 적용
 
     // 질문 목록 데이터
     const questions = [
@@ -28,8 +31,15 @@ const FAQScreen = ({ navigation }) => {
     return (
         <View style={styles.container}>
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                    <Icon name="arrow-back" size={24} color="#FFFFFF" />
+                <TouchableOpacity 
+                    onPress={() => navigation.goBack()} 
+                    style={styles.backButton}
+                >
+                    <Icon 
+                        name="arrow-back" 
+                        size={24} 
+                        color={isLightMode ? "#000" : "#FFF"} 
+                    />
                 </TouchableOpacity>
                 <Text style={styles.title}>자주 묻는 질문</Text>
             </View>
@@ -45,7 +55,7 @@ const FAQScreen = ({ navigation }) => {
                             <Icon
                                 name={expandedQuestionIndex === index ? "chevron-up" : "chevron-down"}
                                 size={24}
-                                color="#FFF"
+                                color={isLightMode ? "#000" : "#FFF"}
                             />
                         </TouchableOpacity>
                         {expandedQuestionIndex === index && (
@@ -61,25 +71,26 @@ const FAQScreen = ({ navigation }) => {
     );
 };
 
-const styles = StyleSheet.create({
+// 테마에 따른 스타일 동적 생성
+const getStyles = (isLightMode) => StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#000',
+        backgroundColor: isLightMode ? '#FFF' : '#000',
         padding: 20,
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'flex-start', // 왼쪽 정렬
-        marginBottom: 30, // 헤더와 내용 간격 추가
-        marginTop: 40,     // 헤더 위 간격 추가
+        justifyContent: 'flex-start',
+        marginBottom: 30,
+        marginTop: 40,
     },
     backButton: {
         marginRight: 10,
     },
     title: {
         fontSize: 24,
-        color: '#FFF',
+        color: isLightMode ? '#000' : '#FFF',
         textAlign: 'center',
         flex: 1,
     },
@@ -88,23 +99,23 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         padding: 15,
-        backgroundColor: '#1f1f1f',
+        backgroundColor: isLightMode ? '#EEE' : '#1f1f1f',
         borderRadius: 10,
         marginBottom: 10,
     },
     question: {
-        color: '#FFF',
+        color: isLightMode ? '#000' : '#FFF',
         fontSize: 18,
     },
     answer: {
-        color: '#B0B0B0',
+        color: isLightMode ? '#666' : '#B0B0B0',
         padding: 15,
-        backgroundColor: '#333',
+        backgroundColor: isLightMode ? '#F5F5F5' : '#333',
         borderRadius: 10,
         marginBottom: 10,
     },
     footer: {
-        color: '#B0B0B0',
+        color: isLightMode ? '#666' : '#B0B0B0',
         fontSize: 12,
         textAlign: 'center',
         marginTop: 20,
