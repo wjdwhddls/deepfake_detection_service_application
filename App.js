@@ -13,6 +13,8 @@ import ProfileEditScreen from './src/screens/ProfileEditScreen';
 import InfoScreen from './src/screens/InfoScreen';
 import FAQScreen from './src/screens/FAQScreen';
 import PrivacyPolicyScreen from './src/screens/PrivacyPolicyScreen';
+import PasswordRecoveryScreen from './src/screens/PasswordRecoveryScreen';
+import PasswordChangeScreen from './src/screens/PasswordChangeScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -76,10 +78,12 @@ const ProfileStack = () => {
 const AuthStack = ({ setIsLoggedIn }) => {
   return (
     <Stack.Navigator>
-      <Stack.Screen name="Login">
+      <Stack.Screen name="Login" options={{ headerShown: false }}>
         {(props) => <LoginScreen {...props} setIsLoggedIn={setIsLoggedIn} />}
       </Stack.Screen>
-      <Stack.Screen name="SignUp" component={SignUpScreen} />
+      <Stack.Screen name="SignUp" component={SignUpScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="PasswordRecovery" component={PasswordRecoveryScreen} options={{ headerShown: false }}/>
+      <Stack.Screen name="PasswordChange" component={PasswordChangeScreen} options={{ headerShown: false }}/>
     </Stack.Navigator>
   );
 };
