@@ -17,9 +17,21 @@ import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';  // useTh
 import PasswordRecoveryScreen from './src/screens/PasswordRecoveryScreen';
 import PasswordChangeScreen from './src/screens/PasswordChangeScreen';
 import LogoutScreen from './src/screens/LogoutScreen';
+import PostDetailScreen from './src/screens/PostDetailScreen';
 
+// 네비게이터 선언
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
+
+// 대시보드 스택 네비게이터
+const DashBoardStack = () => {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="DashBoardMain" component={DashBoardScreen} />
+      <Stack.Screen name="PostDetail" component={PostDetailScreen} />
+    </Stack.Navigator>
+  );
+};
 
 // 프로필 스택 네비게이터
 const ProfileStack = () => {
@@ -69,7 +81,7 @@ const MainTabNavigator = () => {
       />
       <Tab.Screen 
         name="DashBoard" 
-        component={DashBoardScreen} 
+        component={DashBoardStack} // 대시보드 스택 연결
         options={{ headerShown: false }} 
       />
       <Tab.Screen 
