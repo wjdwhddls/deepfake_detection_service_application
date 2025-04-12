@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState , useEffect} from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Icon from 'react-native-vector-icons/Ionicons';
@@ -13,7 +13,10 @@ import ProfileEditScreen from './src/screens/ProfileEditScreen';
 import InfoScreen from './src/screens/InfoScreen';
 import FAQScreen from './src/screens/FAQScreen';
 import PrivacyPolicyScreen from './src/screens/PrivacyPolicyScreen';
+import { checkPermissions } from './src/services/PhoneService'
+import { NativeModules } from 'react-native'
 
+const {CallScreeningModule}=NativeModules
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
@@ -87,6 +90,22 @@ const AuthStack = ({ setIsLoggedIn }) => {
 const App = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(true); // 기본적으로 로그인 상태를 false로 설정합니다.
 
+  useEffect(() => {  
+    const requestPermissions = async () => {  
+      try {  
+        const result = await checkPermissions(CallScreeningModule);   
+        if (result) {  
+          console.log("Permissions granted!");  
+        } else {  
+          alert("Permissions were denied!");  
+        }  
+      } catch (error) {  
+        console.error("An error occurred during permission request:", error);  
+      }  
+    };  
+  
+    requestPermissions();  
+  }, []);  
   return (
     <NavigationContainer>
       {isLoggedIn ? (
