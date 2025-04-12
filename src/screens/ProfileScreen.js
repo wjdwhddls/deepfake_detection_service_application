@@ -1,35 +1,59 @@
 import React from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, Switch, ScrollView } from 'react-native';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  Image, 
+  TouchableOpacity, 
+  Switch, 
+  ScrollView 
+} from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import Icon from 'react-native-vector-icons/Ionicons';
+import { useTheme } from '../contexts/ThemeContext';  // useTheme 훅 import
 
-const ProfileScreen = ({ navigation }) => {
-  const [isLightMode, setIsLightMode] = React.useState(false); // 라이트 모드 상태 관리
+const ProfileScreen = () => {
+  const navigation = useNavigation();
+  const { isLightMode, toggleTheme } = useTheme();  // useTheme 사용
+  const styles = getStyles(isLightMode);
+
+  // 기본 프로필 이미지 (에러 방지를 위한 대체 이미지)
+  const profileImageSource = require('../assets/profile.png');
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView 
+      style={styles.container}
+      contentContainerStyle={styles.contentContainer}
+    >
       <View style={styles.header}>
         <Image
-          source={require('../assets/profile.png')} // assets 폴더에서 이미지 가져오기
+          source={profileImageSource}
           style={styles.profileImage}
+          onError={(e) => console.log('Image load error:', e.nativeEvent.error)}
         />
         <Text style={styles.username}>너 누구니</Text>
         <Text style={styles.userInfo}>deepfake@naver.com | +010 1111 2222</Text>
       </View>
 
       <View style={styles.section}>
-        <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('ProfileEdit')}>
-          <Text style={styles.menuText}>프로필 수정</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('NotificationSettings')}>
-          <Text style={styles.menuText}>알림 설정</Text>
-          <Text style={styles.indicator}>켜짐</Text>
-        </TouchableOpacity>
+        <TouchableMenuItem 
+          text="프로필 수정"
+          onPress={() => navigation.navigate('ProfileEdit')}
+          styles={styles}
+        />
+        
+        <TouchableMenuItem 
+          text="알림 설정"
+          onPress={() => navigation.navigate('NotificationSettings')}
+          styles={styles}
+          rightContent={<Text style={styles.indicator}>켜짐</Text>}
+        />
 
         <View style={styles.switchContainer}>
           <Text style={styles.menuText}>라이트 모드 / 다크 모드</Text>
           <Switch
             value={isLightMode}
-            onValueChange={setIsLightMode}
+            onValueChange={toggleTheme}
             thumbColor={isLightMode ? "#FFF" : "#000"}
             trackColor={{ false: "#767577", true: "#81b0ff" }}
           />
@@ -37,63 +61,93 @@ const ProfileScreen = ({ navigation }) => {
       </View>
 
       <View style={styles.section}>
-        <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('DetectionHistory')}>
-          <Text style={styles.menuText}>탐지 기록</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('MyPosts')}>
-          <Text style={styles.menuText}>내가 게시한 글</Text>
-        </TouchableOpacity>
+        <TouchableMenuItem 
+          text="탐지 기록"
+          onPress={() => navigation.navigate('DetectionHistory')}
+          styles={styles}
+        />
+        
+        <TouchableMenuItem 
+          text="내가 게시한 글"
+          onPress={() => navigation.navigate('MyPosts')}
+          styles={styles}
+        />
       </View>
 
       <View style={styles.section}>
-        <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Info')}>
-          <Text style={styles.menuText}>정보</Text>
-        </TouchableOpacity>
+        <TouchableMenuItem 
+          text="정보"
+          onPress={() => navigation.navigate('Info')}
+          styles={styles}
+        />
+        
+        <TouchableMenuItem 
+          text="자주 묻는 질문"
+          onPress={() => navigation.navigate('FAQ')}
+          styles={styles}
+        />
+        
+        <TouchableMenuItem 
+          text="개인정보 처리방침"
+          onPress={() => navigation.navigate('PrivacyPolicy')}
+          styles={styles}
+        />
 
-        <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('FAQ')}>
-          <Text style={styles.menuText}>자주 묻는 질문</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('PrivacyPolicy')}>
-          <Text style={styles.menuText}>개인정보 처리방침</Text>
-        </TouchableOpacity>
+        <TouchableMenuItem
+        text="로그아웃"
+        onPress={() => navigation.navigate('Login')}
+        styles={styles}
+        />
       </View>
     </ScrollView>
   );
 };
 
-const styles = StyleSheet.create({
+// 재사용 가능한 메뉴 아이템 컴포넌트
+const TouchableMenuItem = ({ text, onPress, styles, rightContent }) => (
+  <TouchableOpacity style={styles.menuItem} onPress={onPress}>
+    <Text style={styles.menuText}>{text}</Text>
+    {rightContent || <Icon name="chevron-forward" size={20} color={styles.indicator.color} />}
+  </TouchableOpacity>
+);
+
+// 스타일 업데이트 (추가 스타일 포함)
+const getStyles = (isLightMode) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000', // 배경 색상
+    backgroundColor: isLightMode ? '#FFF' : '#000',
+  },
+  contentContainer: {
     padding: 20,
   },
   header: {
     alignItems: 'center',
     marginBottom: 40,
+    marginTop: 20,
   },
   profileImage: {
     width: 100,
     height: 100,
     borderRadius: 50,
     marginBottom: 10,
+    backgroundColor: isLightMode ? '#EEE' : '#333',
   },
   username: {
     fontSize: 24,
-    color: '#FFF',
+    fontWeight: 'bold',
+    color: isLightMode ? '#000' : '#FFF',
     marginBottom: 5,
   },
   userInfo: {
-    color: '#A9A9A9',
+    color: isLightMode ? '#666' : '#A9A9A9',
     fontSize: 16,
     marginBottom: 20,
   },
   section: {
-    marginBottom: 20,
+    marginBottom: 25,
   },
   menuItem: {
-    backgroundColor: '#1e1e1e',
+    backgroundColor: isLightMode ? '#EEE' : '#1e1e1e',
     padding: 15,
     borderRadius: 10,
     marginVertical: 5,
@@ -102,21 +156,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   menuText: {
-    color: '#FFF',
-    fontSize: 18,
+    color: isLightMode ? '#000' : '#FFF',
+    fontSize: 16,
   },
   indicator: {
-    color: '#007AFF', // 파란색 또는 원하는 색상으로 수정
-    fontSize: 16,
+    color: '#007AFF',
   },
   switchContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginVertical: 10,
     padding: 15,
-    backgroundColor: '#1e1e1e', // 스위치 배경 색상
+    backgroundColor: isLightMode ? '#EEE' : '#1e1e1e',
     borderRadius: 10,
+    marginTop: 10,
   },
 });
 

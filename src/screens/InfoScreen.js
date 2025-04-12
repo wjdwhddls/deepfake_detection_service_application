@@ -2,44 +2,46 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Ionicons';
+import { useTheme } from '../contexts/ThemeContext'; // ThemeContext에서 useTheme 훅 가져오기
 
 const InfoScreen = () => {
     const navigation = useNavigation(); // Navigation 훅 사용
+    const { isLightMode } = useTheme(); // 현재 테마 정보 가져오기
 
     return (
-        <View style={styles.container}>
+        <View style={styles.container(isLightMode)}>
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                     <Icon name="arrow-back" size={24} color="#FFFFFF" />
                 </TouchableOpacity>
-                <Text style={styles.title}>정보</Text>
+                <Text style={styles.title(isLightMode)}>정보</Text>
             </View>
 
             <ScrollView style={styles.content}>
-                <Text style={styles.sectionTitle}>사업 취지</Text>
-                <Text style={styles.sectionContent}>
+                <Text style={styles.sectionTitle(isLightMode)}>사업 취지</Text>
+                <Text style={styles.sectionContent(isLightMode)}>
                     주저리 주저리{''}
                     어쩌구 저쩌구{''}
                     {'~'.repeat(50)}{''}
                     {'~'.repeat(30)} 이렇게 긍정적 효과를 주기 위해 만들게 되었다.
                 </Text>
 
-                <Text style={styles.sectionTitle}>개발자들</Text>
+                <Text style={styles.sectionTitle(isLightMode)}>개발자들</Text>
                 <View style={styles.developerContainer}>
                     {developers.map((dev) => (
-                        <View key={dev.name} style={styles.developerCard}>
-                            <Icon name={dev.icon} size={40} color="#000" />
-                            <Text style={styles.developerName}>{dev.name}</Text>
-                            <Text style={styles.developerRole}>{dev.role}</Text>
+                        <View key={dev.name} style={styles.developerCard(isLightMode)}>
+                            <Icon name={dev.icon} size={40} color={isLightMode ? '#000' : '#FFF'} />
+                            <Text style={styles.developerName(isLightMode)}>{dev.name}</Text>
+                            <Text style={styles.developerRole(isLightMode)}>{dev.role}</Text>
                         </View>
                     ))}
                 </View>
             </ScrollView>
 
-            <View style={styles.footer}>
-                <Text style={styles.footerText}>© 2024 Company name, All rights reserved.</Text>
-                <Text style={styles.footerLink}>Contact Us</Text>
-                <Text style={styles.footerLink}>Follow us on Instagram</Text>
+            <View style={styles.footer(isLightMode)}>
+                <Text style={styles.footerText(isLightMode)}>© 2024 Company name, All rights reserved.</Text>
+                <Text style={styles.footerLink(isLightMode)}>Contact Us</Text>
+                <Text style={styles.footerLink(isLightMode)}>Follow us on Instagram</Text>
             </View>
         </View>
     );
@@ -53,12 +55,13 @@ const developers = [
     { name: '고유정', role: 'QA', icon: 'checkmark-circle' },
 ];
 
-const styles = StyleSheet.create({
-    container: {
+// 스타일 업데이트 (테마를 동적으로 적용)
+const styles = {
+    container: (isLightMode) => ({
         flex: 1,
-        backgroundColor: '#000',
+        backgroundColor: isLightMode ? '#FFF' : '#000', // 배경색
         padding: 20,
-    },
+    }),
     header: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -69,60 +72,60 @@ const styles = StyleSheet.create({
     backButton: {
         marginRight: 10,
     },
-    title: {
+    title: (isLightMode) => ({
         fontSize: 24,
-        color: '#FFF',
+        color: isLightMode ? '#000' : '#FFF', // 텍스트 색상
         textAlign: 'center',
         flex: 1,
-    },
+    }),
     content: {
         flex: 1,
     },
-    sectionTitle: {
+    sectionTitle: (isLightMode) => ({
         fontSize: 18,
-        color: '#FFF',
+        color: isLightMode ? '#000' : '#FFF', // 제목 색상
         marginBottom: 10,
         borderBottomWidth: 1,
         borderColor: '#FFF',
         paddingBottom: 5,
-    },
-    sectionContent: {
-        color: '#FFF',
+    }),
+    sectionContent: (isLightMode) => ({
+        color: isLightMode ? '#000' : '#FFF', // 내용 색상
         marginBottom: 20,
-    },
+    }),
     developerContainer: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         marginTop: 10,
     },
-    developerCard: {
+    developerCard: (isLightMode) => ({
         alignItems: 'center',
-        backgroundColor: '#1f1f1f',
+        backgroundColor: isLightMode ? '#EEE' : '#1f1f1f', // 카드 배경색
         borderRadius: 10,
         padding: 10,
         flex: 1,
         margin: 5,
-    },
-    developerName: {
-        color: '#000',
+    }),
+    developerName: (isLightMode) => ({
+        color: isLightMode ? '#000' : '#FFF', // 개발자 이름 색상
         fontWeight: 'bold',
         marginTop: 5,
-    },
-    developerRole: {
-        color: '#666',
-    },
-    footer: {
+    }),
+    developerRole: (isLightMode) => ({
+        color: isLightMode ? '#666' : '#A9A9A9', // 개발자 역할 색상
+    }),
+    footer: (isLightMode) => ({
         alignItems: 'center',
         paddingVertical: 15,
-        backgroundColor: '#000',
-    },
-    footerText: {
-        color: '#FFF',
-    },
-    footerLink: {
-        color: '#FFF',
+        backgroundColor: isLightMode ? '#FFF' : '#000', // 푸터 배경색
+    }),
+    footerText: (isLightMode) => ({
+        color: isLightMode ? '#000' : '#FFF', // 푸터 텍스트 색상
+    }),
+    footerLink: (isLightMode) => ({
+        color: isLightMode ? '#000' : '#FFF', // 링크 색상
         marginVertical: 5,
-    },
-});
+    }),
+};
 
 export default InfoScreen;
