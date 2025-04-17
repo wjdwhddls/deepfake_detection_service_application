@@ -18,6 +18,7 @@ import PasswordRecoveryScreen from './src/screens/PasswordRecoveryScreen';
 import PasswordChangeScreen from './src/screens/PasswordChangeScreen';
 import LogoutScreen from './src/screens/LogoutScreen';
 import PostDetailScreen from './src/screens/PostDetailScreen';
+import ResultScreen from './src/screens/ResultScreen'
 
 // 네비게이터 선언
 const Tab = createBottomTabNavigator();
@@ -48,9 +49,18 @@ const ProfileStack = () => {
   );
 };
 
-// 메인 탭 네비게이터
+// 프로필 스택 네비게이터
+const DetectStack = () => {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="DetectMain" component={HomeScreen} />
+      <Stack.Screen name="DetectDetail" component={ResultScreen} />
+    </Stack.Navigator>
+  );
+};
+
 const MainTabNavigator = () => {
-  const { isLightMode } = useTheme();  // 현재 테마 상태 가져오기
+  const { isLightMode } = useTheme();
 
   return (
     <Tab.Navigator
@@ -68,20 +78,22 @@ const MainTabNavigator = () => {
 
           return <Icon name={iconName} size={size} color={color} />;
         },
-        tabBarActiveTintColor: 'white',
-        tabBarInactiveTintColor: '#b0b0b0',
-        tabBarStyle: { backgroundColor: '#333333' },
+        tabBarActiveTintColor: isLightMode ? '#007AFF' : '#FFCC00', // 모드에 따른 색상
+        tabBarInactiveTintColor: isLightMode ? '#8e8e93' : '#BBBBBB',
+        tabBarStyle: {
+          backgroundColor: isLightMode ? '#FFFFFF' : '#333333', // 라이트/다크 모드 TabBar 스타일
+          borderTopWidth: 0,
+        },
       })}
     >
-      {/* HomeScreen에 현재 테마 값을 props로 전달 */}
       <Tab.Screen 
         name="Home" 
-        children={() => <HomeScreen theme={isLightMode ? 'light' : 'dark'} />} 
+        component={DetectStack} // DetectStack 연결
         options={{ headerShown: false }} 
       />
       <Tab.Screen 
         name="DashBoard" 
-        component={DashBoardStack} // 대시보드 스택 연결
+        component={DashBoardStack} 
         options={{ headerShown: false }} 
       />
       <Tab.Screen 
