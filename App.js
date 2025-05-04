@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';  
-import { View, Button, Text, PermissionsAndroid, StyleSheet } from 'react-native';  
+import { View, Button, StyleSheet } from 'react-native';  
 import { NavigationContainer } from '@react-navigation/native';  
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';  
 import Icon from 'react-native-vector-icons/Ionicons';  
@@ -14,111 +14,99 @@ import ProfileEditScreen from './src/screens/ProfileEditScreen';
 import InfoScreen from './src/screens/InfoScreen';  
 import FAQScreen from './src/screens/FAQScreen';  
 import PrivacyPolicyScreen from './src/screens/PrivacyPolicyScreen';  
-import { checkPermissions } from './src/services/PhoneService';  
-import { NativeModules } from 'react-native';  
-import { mediaDevices, RTCPeerConnection, RTCView } from 'react-native-webrtc';  
 import PasswordRecoveryScreen from './src/screens/PasswordRecoveryScreen';  
 import PasswordChangeScreen from './src/screens/PasswordChangeScreen';  
 import LogoutScreen from './src/screens/LogoutScreen';  
 import PostDetailScreen from './src/screens/PostDetailScreen';  
+import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';  
+import { mediaDevices, RTCPeerConnection, RTCView } from 'react-native-webrtc';  
 import io from 'socket.io-client';  
-import { ThemeProvider, useTheme } from './src/contexts/ThemeContext'; // 경로 확인
+import { PermissionsAndroid, NativeModules } from 'react-native';  
+import { checkPermissions } from './src/services/PhoneService';  
 
 const Tab = createBottomTabNavigator();  
 const Stack = createStackNavigator();  
-
 const { CallScreeningModule } = NativeModules;  
 
 // Peer Connection Configuration  
 const peerConnectionConfig = {  
-    iceServers: [  
-        { urls: 'stun:stun.l.google.com:19302' },  
-    ],  
+    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],  
 };  
 
 // 대시보드 스택 네비게이터  
-const DashBoardStack = () => {  
+const DashBoardStack = () => (  
+    <Stack.Navigator screenOptions={{ headerShown: false }}>  
+        <Stack.Screen name="DashBoardMain" component={DashBoardScreen} />  
+        <Stack.Screen name="PostDetail" component={PostDetailScreen} />  
+    </Stack.Navigator>  
+);  
+
+// 프로필 스택 네비게이터  
+const ProfileStack = () => (  
+    <Stack.Navigator screenOptions={{ headerShown: false }}>  
+        <Stack.Screen name="ProfileMain" component={ProfileScreen} />  
+        <Stack.Screen name="NotificationSettings" component={NotificationSettingsScreen} />  
+        <Stack.Screen name="ProfileEdit" component={ProfileEditScreen} />  
+        <Stack.Screen name="Info" component={InfoScreen} />  
+        <Stack.Screen name="FAQ" component={FAQScreen} />  
+        <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />  
+        <Stack.Screen name="Logout" component={LogoutScreen} />  
+    </Stack.Navigator>  
+);  
+
+// 메인 탭 네비게이터  
+const MainTabNavigator = () => {  
+    const { isLightMode } = useTheme();  
+
     return (  
-        <Stack.Navigator screenOptions={{ headerShown: false }}>  
-            <Stack.Screen name="DashBoardMain" component={DashBoardScreen} />  
-            <Stack.Screen name="PostDetail" component={PostDetailScreen} />  
-        </Stack.Navigator>  
+        <Tab.Navigator  
+            screenOptions={({ route }) => ({  
+                tabBarIcon: ({ focused, color, size }) => {  
+                    let iconName;  
+                    if (route.name === 'Home') {  
+                        iconName = focused ? 'shield-checkmark' : 'shield-checkmark-outline';  
+                    } else if (route.name === 'DashBoard') {  
+                        iconName = focused ? 'chatbubbles' : 'chatbubble-outline';  
+                    } else if (route.name === 'Profile') {  
+                        iconName = focused ? 'person' : 'person-outline';  
+                    }  
+                    return <Icon name={iconName} size={size} color={color} />;  
+                },  
+                tabBarActiveTintColor: 'white',  
+                tabBarInactiveTintColor: '#b0b0b0',  
+                tabBarStyle: { backgroundColor: '#333333' },  
+            })}  
+        >  
+            <Tab.Screen   
+                name="Home"   
+                children={() => <HomeScreen theme={isLightMode ? 'light' : 'dark'} />}   
+                options={{ headerShown: false }}   
+            />  
+            <Tab.Screen   
+                name="DashBoard"   
+                component={DashBoardStack}   
+                options={{ headerShown: false }}   
+            />  
+            <Tab.Screen   
+                name="Profile"   
+                component={ProfileStack}   
+                options={{ headerShown: false }}   
+            />  
+        </Tab.Navigator>  
     );  
 };  
 
-// 프로필 스택 네비게이터
-const ProfileStack = ({ setIsLoggedIn }) => {
-  return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="ProfileMain">
-        {(props) => <ProfileScreen {...props} setIsLoggedIn={setIsLoggedIn} />} 
-      </Stack.Screen>
-      <Stack.Screen name="NotificationSettings" component={NotificationSettingsScreen} />
-      <Stack.Screen name="ProfileEdit" component={ProfileEditScreen} />
-      <Stack.Screen name="Info" component={InfoScreen} />
-      <Stack.Screen name="FAQ" component={FAQScreen} />
-      <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
-    </Stack.Navigator>
-  );
-};
-// 메인 탭 네비게이터
-const MainTabNavigator = ({ setIsLoggedIn }) => {
-  const { isLightMode } = useTheme();  
-
-  return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        tabBarIcon: ({ focused, color, size }) => {
-          let iconName;
-
-          if (route.name === 'Home') {
-            iconName = focused ? 'shield-checkmark' : 'shield-checkmark-outline';
-          } else if (route.name === 'DashBoard') {
-            iconName = focused ? 'chatbubbles' : 'chatbubble-outline';
-          } else if (route.name === 'Profile') {
-            iconName = focused ? 'person' : 'person-outline';
-          }
-
-          return <Icon name={iconName} size={size} color={color} />;
-        },
-        tabBarActiveTintColor: 'white',
-        tabBarInactiveTintColor: '#b0b0b0',
-        tabBarStyle: { backgroundColor: '#333333' },
-      })}
-    >
-      {/* HomeScreen에 현재 테마 값을 props로 전달 */}
-      <Tab.Screen
-        name="Home"
-        children={() => <HomeScreen theme={isLightMode ? 'light' : 'dark'} />}
-        options={{ headerShown: false }}
-      />
-      <Tab.Screen
-        name="DashBoard"
-        component={DashBoardStack} // 대시보드 스택 연결
-        options={{ headerShown: false }}
-      />
-      <Tab.Screen 
-        name="Profile" 
-        children={() => <ProfileStack setIsLoggedIn={setIsLoggedIn} />} // setIsLoggedIn 전달
-        options={{ headerShown: false }} 
-      />
-    </Tab.Navigator>
-  );
-};
-
-// 인증 스택 네비게이터
-const AuthStack = ({ setIsLoggedIn }) => {
-  return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="Login">
-        {(props) => <LoginScreen {...props} setIsLoggedIn={setIsLoggedIn} />}
-      </Stack.Screen>
-      <Stack.Screen name="SignUp" component={SignUpScreen} />
-      <Stack.Screen name="PasswordRecovery" component={PasswordRecoveryScreen} />
-      <Stack.Screen name="PasswordChange" component={PasswordChangeScreen} />
-    </Stack.Navigator>
-  );
-};
+// 인증 스택 네비게이터  
+const AuthStack = ({ setIsLoggedIn }) => (  
+    <Stack.Navigator screenOptions={{ headerShown: false }}>  
+        <Stack.Screen name="Login">  
+            {(props) => <LoginScreen {...props} setIsLoggedIn={setIsLoggedIn} />}  
+        </Stack.Screen>  
+        <Stack.Screen name="SignUp" component={SignUpScreen} />  
+        <Stack.Screen name="PasswordRecovery" component={PasswordRecoveryScreen} />  
+        <Stack.Screen name="PasswordChange" component={PasswordChangeScreen} />  
+    </Stack.Navigator>  
+);  
 
 // VoIP 통화 기능  
 const VoIPCall = ({ remotePeerId }) => {  
@@ -128,14 +116,9 @@ const VoIPCall = ({ remotePeerId }) => {
 
     useEffect(() => {  
         const getUserMedia = async () => {  
-            const granted = await PermissionsAndroid.request(  
-                PermissionsAndroid.PERMISSIONS.RECORD_AUDIO  
-            );  
-
+            const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);  
             if (granted === PermissionsAndroid.RESULTS.GRANTED) {  
-                const stream = await mediaDevices.getUserMedia({  
-                    audio: true,  
-                });  
+                const stream = await mediaDevices.getUserMedia({ audio: true });  
                 setLocalStream(stream);  
                 stream.getTracks().forEach(track => {  
                     peerConnection.current.addTrack(track, stream);  
@@ -145,11 +128,9 @@ const VoIPCall = ({ remotePeerId }) => {
 
         getUserMedia();  
 
-        // WebSocket 설정  
-        const socket = io('http://172.30.1.73:3000'); // 서버 주소  
+        const socket = io('http://172.30.1.73:3000');  
 
         socket.on('offer', async (data) => {  
-            console.log('Received offer:', data);  
             await peerConnection.current.setRemoteDescription(new RTCSessionDescription(data.offer));  
             const answer = await peerConnection.current.createAnswer();  
             await peerConnection.current.setLocalDescription(answer);  
@@ -157,7 +138,6 @@ const VoIPCall = ({ remotePeerId }) => {
         });  
 
         socket.on('answer', (data) => {  
-            console.log('Received answer:', data);  
             peerConnection.current.setRemoteDescription(new RTCSessionDescription(data.answer));  
         });  
 

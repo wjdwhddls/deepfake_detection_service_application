@@ -5,7 +5,8 @@ import {
   FlatList,
   StyleSheet,
   TouchableOpacity,
-  ActivityIndicator
+  ActivityIndicator,
+  TextInput,
 } from 'react-native';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -16,21 +17,26 @@ const DashBoardScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState(''); // 검색어 상태 추가
   const { isLightMode } = useTheme();
   const styles = getStyles(isLightMode);
 
   // 대시보드 데이터 가져오기
-  const fetchDashBoards = async () => {
+  const fetchDashBoards = async (query = '') => {
     setLoading(true);
     setError(null);
     try {
       const token = await AsyncStorage.getItem('token');
 
       if (!token) {
-        throw new Error('토큰이 없습니다. 다시 로그인 해주세요.');
+        throw new Error('다시 로그인 해주세요.');
       }
 
-      const response = await axios.get('http://10.0.2.2:3000/api/dashboard', {
+      const url = query
+        ? `http://10.0.2.2:3000/api/dashboard/search?title=${query}`
+        : 'http://10.0.2.2:3000/api/dashboard';
+
+      const response = await axios.get(url, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -44,9 +50,10 @@ const DashBoardScreen = ({ navigation }) => {
       }
     } catch (error) {
       console.error('대시보드 불러오기 실패:', error);
-      setError(error.response 
-        ? error.response.data.message || '데이터를 불러오는 데 문제가 발생했습니다.' 
-        : '네트워크 오류가 발생했습니다.'
+      setError(
+        error.response
+          ? error.response.data.message || '데이터를 불러오는 데 문제가 발생했습니다.'
+          : '네트워크 오류가 발생했습니다.'
       );
     } finally {
       setLoading(false);
@@ -59,6 +66,17 @@ const DashBoardScreen = ({ navigation }) => {
     setRefreshing(true);
     fetchDashBoards();
   };
+
+  // 검색 핸들러
+  const handleSearch = () => {
+    if (searchQuery.trim() === '') {
+      Alert.alert('입력 오류', '제목 키워드는 반드시 입력해야 합니다.');
+      return; // 검색어가 비어 있으면 함수를 종료
+    }
+    
+    fetchDashBoards(searchQuery.trim());
+  };
+
 
   useEffect(() => {
     fetchDashBoards();
@@ -99,6 +117,23 @@ const DashBoardScreen = ({ navigation }) => {
   // 대시보드 내용 렌더링
   return (
     <View style={styles.container}>
+      {/* 검색바 추가 */}
+      <View style={styles.searchContainer}>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="제목 검색..."
+          placeholderTextColor={isLightMode ? '#666' : '#A9A9A9'} // placeholder 색상
+          value={searchQuery}
+          onChangeText={setSearchQuery} // 입력할 때마다 상태 업데이트
+          keyboardType="default" // 기본 키보드로 설정하여 한글 입력 지원
+          returnKeyType="search" // 검색 키를 사용하도록 설정
+          onSubmitEditing={handleSearch} // 엔터키로 검색 실행
+        />
+        <TouchableOpacity style={styles.searchButton} onPress={handleSearch}>
+          <Text style={styles.searchButtonText}>검색</Text>
+        </TouchableOpacity>
+      </View>
+
       <FlatList
         data={dashBoards}
         renderItem={renderItem}
@@ -108,7 +143,7 @@ const DashBoardScreen = ({ navigation }) => {
         onRefresh={onRefresh}
         refreshing={refreshing}
       />
-      
+
       <TouchableOpacity 
         style={styles.fab} 
         onPress={() => navigation.navigate('WritePost')}
@@ -134,40 +169,46 @@ const getStyles = (isLightMode) => StyleSheet.create({
   },
   loadingText: {
     marginTop: 10,
-    color: isLightMode ? '#000' : '#FFF',
+    color: isLightMode ? '#000' : '#FFF', // 로딩 텍스트 색상
   },
   header: {
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 16,
     textAlign: 'center',
-    color: isLightMode ? '#000' : '#FFF',
+    color: isLightMode ? '#000' : '#FFF', // 헤더 색상
   },
   dashBoardItem: {
     backgroundColor: isLightMode ? '#EEE' : '#1e1e1e',
     padding: 16,
     marginBottom: 8,
     borderRadius: 10,
+    // 그림자 효과 추가
+    elevation: 3,
+    shadowColor: isLightMode ? '#000' : '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1,
   },
   dashBoardTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 8,
-    color: isLightMode ? '#000' : '#FFF',
+    color: isLightMode ? '#000' : '#FFF', // 제목 색상
   },
   dashBoardAuthor: {
     fontSize: 14,
-    color: isLightMode ? '#666' : '#A9A9A9',
+    color: isLightMode ? '#000' : '#A9A9A9', // 작성자 ID 색상
     marginBottom: 4,
   },
   dashBoardContents: {
     fontSize: 14,
-    color: isLightMode ? '#333' : '#A9A9A9',
+    color: isLightMode ? '#000' : '#A9A9A9', // 내용 색상
     marginBottom: 4,
   },
   dashBoardLikes: {
     fontSize: 12,
-    color: '#007AFF',
+    color: '#007AFF', // 좋아요 수 색상
   },
   fab: {
     position: 'absolute',
@@ -194,6 +235,65 @@ const getStyles = (isLightMode) => StyleSheet.create({
     color: 'red',
     fontSize: 16,
     textAlign: 'center',
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    marginBottom: 12,
+  },
+  searchInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#007AFF',
+    borderRadius: 4,
+    padding: 8,
+    paddingHorizontal: 16,
+    marginRight: 8,
+    color: isLightMode ? '#000' : '#FFF', // 검색 입력 텍스트 색상
+  },
+  searchButton: {
+    backgroundColor: '#007AFF',
+    padding: 10,
+    borderRadius: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  searchButtonText: {
+    color: '#FFF',
+    fontWeight: 'bold',
+  },
+
+  // 추가 스타일 정의
+  dashBoardItemHighlight: {
+    backgroundColor: isLightMode ? '#DDD' : '#333', // 강조 시색상
+    borderColor: '#007AFF',
+    borderWidth: 1,
+  },
+  scrollView: {
+    paddingVertical: 10,
+  },
+  noResultsContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: isLightMode ? '#FFF' : '#000',
+  },
+  noResultsText: {
+    color: isLightMode ? '#000' : '#FFF',
+    fontSize: 18,
+    textAlign: 'center',
+  },
+  buttonOutline: {
+    borderWidth: 1,
+    borderColor: '#007AFF',
+    backgroundColor: 'transparent',
+    padding: 10,
+    borderRadius: 4,
+  },
+  buttonOutlineText: {
+    color: '#007AFF',
+    textAlign: 'center',
+    fontWeight: 'bold',
   },
 });
 
