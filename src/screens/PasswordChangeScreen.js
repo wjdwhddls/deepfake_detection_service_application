@@ -42,13 +42,13 @@ const PasswordChangeScreen = ({ navigation }) => {
 
             <View style={styles.footer}>
                 <Text style={styles.footerText}>
-                    아직 계정이 없으신가요? 
+                    아직 계정이 없으신가요?
                     <Text onPress={() => navigation.navigate('SignUp')} style={styles.link}> 회원가입</Text>
                 </Text>
-                <Text style={styles.footerText}>
-                    비밀번호를 잊으셨나요? 
-                    <Text onPress={() => navigation.navigate('PasswordRecovery')} style={styles.link}> 비밀번호 찾기</Text>
-                </Text>
+
+                <TouchableOpacity onPress={() => navigation.navigate('PasswordRecovery')}>
+                    <Text style={styles.footerText}>비밀번호를 잊으셨나요?</Text>
+                </TouchableOpacity>
             </View>
         </View>
     );

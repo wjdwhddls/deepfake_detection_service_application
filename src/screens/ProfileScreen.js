@@ -1,18 +1,20 @@
 import React from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  Image, 
-  TouchableOpacity, 
-  Switch, 
-  ScrollView 
+import {
+  View,
+  Text,
+  StyleSheet,
+  Image,
+  TouchableOpacity,
+  Switch,
+  ScrollView,
+  Alert,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useTheme } from '../contexts/ThemeContext';  // useTheme 훅 import
 
-const ProfileScreen = () => {
+const ProfileScreen = ({ setIsLoggedIn }) => {
+  console.log("ProfileScreen 렌더링됨."); // 추가 로그
   const navigation = useNavigation();
   const { isLightMode, toggleTheme } = useTheme();  // useTheme 사용
   const styles = getStyles(isLightMode);
@@ -20,8 +22,30 @@ const ProfileScreen = () => {
   // 기본 프로필 이미지 (에러 방지를 위한 대체 이미지)
   const profileImageSource = require('../assets/profile.png');
 
+  // 로그아웃 핸들러
+  const handleLogout = () => {
+    Alert.alert(
+      '로그아웃 확인',
+      '정말로 로그아웃 하시겠습니까?',
+      [
+        {
+          text: '취소',
+          style: 'cancel'
+        },
+        {
+          text: '확인',
+          onPress: () => {
+            setIsLoggedIn(false); // 상태 변경
+            navigation.navigate('Login'); // 로그인 화면으로 이동
+          }
+        }
+      ],
+      { cancelable: false } // 백 버튼 클릭 시 Alert 회피
+    );
+  };
+
   return (
-    <ScrollView 
+    <ScrollView
       style={styles.container}
       contentContainerStyle={styles.contentContainer}
     >
@@ -36,13 +60,13 @@ const ProfileScreen = () => {
       </View>
 
       <View style={styles.section}>
-        <TouchableMenuItem 
+        <TouchableMenuItem
           text="프로필 수정"
           onPress={() => navigation.navigate('ProfileEdit')}
           styles={styles}
         />
-        
-        <TouchableMenuItem 
+
+        <TouchableMenuItem
           text="알림 설정"
           onPress={() => navigation.navigate('NotificationSettings')}
           styles={styles}
@@ -61,13 +85,13 @@ const ProfileScreen = () => {
       </View>
 
       <View style={styles.section}>
-        <TouchableMenuItem 
+        <TouchableMenuItem
           text="탐지 기록"
           onPress={() => navigation.navigate('DetectionHistory')}
           styles={styles}
         />
-        
-        <TouchableMenuItem 
+
+        <TouchableMenuItem
           text="내가 게시한 글"
           onPress={() => navigation.navigate('MyPosts')}
           styles={styles}
@@ -75,28 +99,28 @@ const ProfileScreen = () => {
       </View>
 
       <View style={styles.section}>
-        <TouchableMenuItem 
+        <TouchableMenuItem
           text="정보"
           onPress={() => navigation.navigate('Info')}
           styles={styles}
         />
-        
-        <TouchableMenuItem 
+
+        <TouchableMenuItem
           text="자주 묻는 질문"
           onPress={() => navigation.navigate('FAQ')}
           styles={styles}
         />
-        
-        <TouchableMenuItem 
+
+        <TouchableMenuItem
           text="개인정보 처리방침"
           onPress={() => navigation.navigate('PrivacyPolicy')}
           styles={styles}
         />
 
         <TouchableMenuItem
-        text="로그아웃"
-        onPress={() => navigation.navigate('Login')}
-        styles={styles}
+          text="로그아웃"
+          onPress={handleLogout} // 수정된 부분: 로그아웃 핸들러 사용
+          styles={styles}
         />
       </View>
     </ScrollView>

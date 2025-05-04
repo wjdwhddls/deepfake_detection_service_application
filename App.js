@@ -46,79 +46,79 @@ const DashBoardStack = () => {
     );  
 };  
 
-// 프로필 스택 네비게이터  
-const ProfileStack = () => {  
-    return (  
-        <Stack.Navigator screenOptions={{ headerShown: false }}>  
-            <Stack.Screen name="ProfileMain" component={ProfileScreen} />  
-            <Stack.Screen name="NotificationSettings" component={NotificationSettingsScreen} />  
-            <Stack.Screen name="ProfileEdit" component={ProfileEditScreen} />  
-            <Stack.Screen name="Info" component={InfoScreen} />  
-            <Stack.Screen name="FAQ" component={FAQScreen} />  
-            <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />  
-            <Stack.Screen name="Logout" component={LogoutScreen} />  
-        </Stack.Navigator>  
-    );  
-};  
+// 프로필 스택 네비게이터
+const ProfileStack = ({ setIsLoggedIn }) => {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="ProfileMain">
+        {(props) => <ProfileScreen {...props} setIsLoggedIn={setIsLoggedIn} />} 
+      </Stack.Screen>
+      <Stack.Screen name="NotificationSettings" component={NotificationSettingsScreen} />
+      <Stack.Screen name="ProfileEdit" component={ProfileEditScreen} />
+      <Stack.Screen name="Info" component={InfoScreen} />
+      <Stack.Screen name="FAQ" component={FAQScreen} />
+      <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
+    </Stack.Navigator>
+  );
+};
+// 메인 탭 네비게이터
+const MainTabNavigator = ({ setIsLoggedIn }) => {
+  const { isLightMode } = useTheme();  
 
-// 메인 탭 네비게이터  
-const MainTabNavigator = () => {  
-    const { isLightMode } = useTheme();  
+  return (
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        tabBarIcon: ({ focused, color, size }) => {
+          let iconName;
 
-    return (  
-        <Tab.Navigator  
-            screenOptions={({ route }) => ({  
-                tabBarIcon: ({ focused, color, size }) => {  
-                    let iconName;  
+          if (route.name === 'Home') {
+            iconName = focused ? 'shield-checkmark' : 'shield-checkmark-outline';
+          } else if (route.name === 'DashBoard') {
+            iconName = focused ? 'chatbubbles' : 'chatbubble-outline';
+          } else if (route.name === 'Profile') {
+            iconName = focused ? 'person' : 'person-outline';
+          }
 
-                    if (route.name === 'Home') {  
-                        iconName = focused ? 'shield-checkmark' : 'shield-checkmark-outline';  
-                    } else if (route.name === 'DashBoard') {  
-                        iconName = focused ? 'chatbubbles' : 'chatbubble-outline';  
-                    } else if (route.name === 'Profile') {  
-                        iconName = focused ? 'person' : 'person-outline';  
-                    }  
+          return <Icon name={iconName} size={size} color={color} />;
+        },
+        tabBarActiveTintColor: 'white',
+        tabBarInactiveTintColor: '#b0b0b0',
+        tabBarStyle: { backgroundColor: '#333333' },
+      })}
+    >
+      {/* HomeScreen에 현재 테마 값을 props로 전달 */}
+      <Tab.Screen
+        name="Home"
+        children={() => <HomeScreen theme={isLightMode ? 'light' : 'dark'} />}
+        options={{ headerShown: false }}
+      />
+      <Tab.Screen
+        name="DashBoard"
+        component={DashBoardStack} // 대시보드 스택 연결
+        options={{ headerShown: false }}
+      />
+      <Tab.Screen 
+        name="Profile" 
+        children={() => <ProfileStack setIsLoggedIn={setIsLoggedIn} />} // setIsLoggedIn 전달
+        options={{ headerShown: false }} 
+      />
+    </Tab.Navigator>
+  );
+};
 
-                    return <Icon name={iconName} size={size} color={color} />;  
-                },  
-                tabBarActiveTintColor: 'white',  
-                tabBarInactiveTintColor: '#b0b0b0',  
-                tabBarStyle: { backgroundColor: '#333333' },  
-            })}  
-        >  
-            {/* HomeScreen에 현재 테마 값을 props로 전달 */}  
-            <Tab.Screen   
-                name="Home"   
-                children={() => <HomeScreen theme={isLightMode ? 'light' : 'dark'} />}   
-                options={{ headerShown: false }}   
-            />  
-            <Tab.Screen   
-                name="DashBoard"   
-                component={DashBoardStack} // 대시보드 스택 연결  
-                options={{ headerShown: false }}   
-            />  
-            <Tab.Screen   
-                name="Profile"   
-                component={ProfileStack}   
-                options={{ headerShown: false }}   
-            />  
-        </Tab.Navigator>  
-    );  
-};  
-
-// 인증 스택 네비게이터  
-const AuthStack = ({ setIsLoggedIn }) => {  
-    return (  
-        <Stack.Navigator screenOptions={{ headerShown: false }}>  
-            <Stack.Screen name="Login">  
-                {(props) => <LoginScreen {...props} setIsLoggedIn={setIsLoggedIn} />}  
-            </Stack.Screen>  
-            <Stack.Screen name="SignUp" component={SignUpScreen} />  
-            <Stack.Screen name="PasswordRecovery" component={PasswordRecoveryScreen} />  
-            <Stack.Screen name="PasswordChange" component={PasswordChangeScreen} />  
-        </Stack.Navigator>  
-    );  
-};  
+// 인증 스택 네비게이터
+const AuthStack = ({ setIsLoggedIn }) => {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="Login">
+        {(props) => <LoginScreen {...props} setIsLoggedIn={setIsLoggedIn} />}
+      </Stack.Screen>
+      <Stack.Screen name="SignUp" component={SignUpScreen} />
+      <Stack.Screen name="PasswordRecovery" component={PasswordRecoveryScreen} />
+      <Stack.Screen name="PasswordChange" component={PasswordChangeScreen} />
+    </Stack.Navigator>
+  );
+};
 
 // VoIP 통화 기능  
 const VoIPCall = ({ remotePeerId }) => {  
