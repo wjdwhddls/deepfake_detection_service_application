@@ -1,4 +1,4 @@
-import React, { useState , useEffect} from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Icon from 'react-native-vector-icons/Ionicons';
@@ -13,16 +13,14 @@ import ProfileEditScreen from './src/screens/ProfileEditScreen';
 import InfoScreen from './src/screens/InfoScreen';
 import FAQScreen from './src/screens/FAQScreen';
 import PrivacyPolicyScreen from './src/screens/PrivacyPolicyScreen';
-
 import { checkPermissions } from './src/services/PhoneService'
 import { NativeModules } from 'react-native'
 
-const {CallScreeningModule}=NativeModules
+const { CallScreeningModule } = NativeModules
 
 import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';  // useTheme 훅을 추가
 import PasswordRecoveryScreen from './src/screens/PasswordRecoveryScreen';
 import PasswordChangeScreen from './src/screens/PasswordChangeScreen';
-import LogoutScreen from './src/screens/LogoutScreen';
 import PostDetailScreen from './src/screens/PostDetailScreen';
 
 // 네비게이터 선언
@@ -41,23 +39,27 @@ const DashBoardStack = () => {
 };
 
 // 프로필 스택 네비게이터
-const ProfileStack = () => {
+const ProfileStack = ({ setIsLoggedIn }) => {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="ProfileMain" component={ProfileScreen} />
+      <Stack.Screen name="ProfileMain">
+        {(props) => <ProfileScreen {...props} setIsLoggedIn={setIsLoggedIn} />} 
+      </Stack.Screen>
       <Stack.Screen name="NotificationSettings" component={NotificationSettingsScreen} />
       <Stack.Screen name="ProfileEdit" component={ProfileEditScreen} />
       <Stack.Screen name="Info" component={InfoScreen} />
       <Stack.Screen name="FAQ" component={FAQScreen} />
       <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
-      <Stack.Screen name="Logout" component={LogoutScreen} />
+      {/* <Stack.Screen name="Logout">
+        {(props) => <LogoutScreen {...props} setIsLoggedIn={setIsLoggedIn} />}
+      </Stack.Screen> */}
     </Stack.Navigator>
   );
 };
 
 // 메인 탭 네비게이터
-const MainTabNavigator = () => {
-  const { isLightMode } = useTheme();  // 현재 테마 상태 가져오기
+const MainTabNavigator = ({ setIsLoggedIn }) => {
+  const { isLightMode } = useTheme();  
 
   return (
     <Tab.Navigator
@@ -81,19 +83,19 @@ const MainTabNavigator = () => {
       })}
     >
       {/* HomeScreen에 현재 테마 값을 props로 전달 */}
-      <Tab.Screen 
-        name="Home" 
-        children={() => <HomeScreen theme={isLightMode ? 'light' : 'dark'} />} 
-        options={{ headerShown: false }} 
+      <Tab.Screen
+        name="Home"
+        children={() => <HomeScreen theme={isLightMode ? 'light' : 'dark'} />}
+        options={{ headerShown: false }}
       />
-      <Tab.Screen 
-        name="DashBoard" 
+      <Tab.Screen
+        name="DashBoard"
         component={DashBoardStack} // 대시보드 스택 연결
-        options={{ headerShown: false }} 
+        options={{ headerShown: false }}
       />
       <Tab.Screen 
         name="Profile" 
-        component={ProfileStack} 
+        children={() => <ProfileStack setIsLoggedIn={setIsLoggedIn} />} // setIsLoggedIn 전달
         options={{ headerShown: false }} 
       />
     </Tab.Navigator>
@@ -117,32 +119,32 @@ const AuthStack = ({ setIsLoggedIn }) => {
 const App = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
-  useEffect(() => {  
-    const requestPermissions = async () => {  
-      try {  
-        const result = await checkPermissions(CallScreeningModule);   
-        if (result) {  
-          console.log("Permissions granted!");  
-        } else {  
-          alert("Permissions were denied!");  
-        }  
-      } catch (error) {  
-        console.error("An error occurred during permission request:", error);  
-      }  
-    };  
-  
-    requestPermissions();  
-  }, []);  
+  useEffect(() => {
+    const requestPermissions = async () => {
+      try {
+        const result = await checkPermissions(CallScreeningModule);
+        if (result) {
+          console.log("Permissions granted!");
+        } else {
+          alert("Permissions were denied!");
+        }
+      } catch (error) {
+        console.error("An error occurred during permission request:", error);
+      }
+    };
+
+    requestPermissions();
+  }, []);
   return (
     <ThemeProvider>
       <NavigationContainer>
         {isLoggedIn ? (
-          <MainTabNavigator />
+          <MainTabNavigator setIsLoggedIn={setIsLoggedIn} />
         ) : (
           <AuthStack setIsLoggedIn={setIsLoggedIn} />
         )}
       </NavigationContainer>
-    </ThemeProvider>
+    </ThemeProvider>  
   );
 };
 

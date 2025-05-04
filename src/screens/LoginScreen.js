@@ -41,7 +41,7 @@ const LoginScreen = ({ setIsLoggedIn }) => {
         // AsyncStorage에 토큰 저장
         await AsyncStorage.setItem('token', token); // 토큰 저장
         setIsLoggedIn(true);
-        navigation.navigate('Profile');
+        navigation.navigate('Home');
         Alert.alert('로그인 성공', '환영합니다!');
       } else {
         console.error('토큰 미수신 - 응답 헤더:', response.headers);
@@ -119,8 +119,10 @@ const LoginScreen = ({ setIsLoggedIn }) => {
       <TouchableOpacity onPress={() => navigation.navigate('SignUp')}>
         <Text style={styles.footerText}>아직 계정이 없으신가요? 회원가입</Text>
       </TouchableOpacity>
-      
-      <Text style={styles.footerText}>비밀번호를 잊으셨나요?</Text>
+
+      <TouchableOpacity onPress={() => navigation.navigate('PasswordRecovery')}>
+        <Text style={styles.footerText}>비밀번호를 잊으셨나요?</Text>
+      </TouchableOpacity>
     </View>
   );
 };
