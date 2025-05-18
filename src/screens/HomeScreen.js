@@ -1,17 +1,20 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native'; // React Navigation 사용
 import { pick } from '@react-native-documents/picker'; // 파일 선택을 위한 모듈
 import { request, PERMISSIONS, RESULTS } from 'react-native-permissions'; // 권한 요청 모듈
 import axios from 'axios';
 import { useTheme } from '../contexts/ThemeContext'; // 경로 주의!
 
-const HomeScreen = () => {
+
+const HomeScreen = ({ socket, setRemotePeerId, userPhoneNumber }) => {
   const [resultData, setResultData] = useState(null); // 서버 결과 저장
   const [showUploadButton, setShowUploadButton] = useState(false); // Upload 버튼 표시 여부
   const [loading, setLoading] = useState(false); // 로딩 중인 상태 관리
+  const [phoneNumber, setPhoneNumber] = useState(''); // 전화번호 입력
   const { isLightMode } = useTheme();
   const navigation = useNavigation(); // 네비게이터 훅
+  console.log('[HomeScreen] userPhoneNumber:', userPhoneNumber);
 
   const handleDetect = () => {
     setShowUploadButton(!showUploadButton); // Detect 버튼 눌렀을 때 Upload 버튼 토글
@@ -104,6 +107,15 @@ const HomeScreen = () => {
     navigation.navigate('DetectDetail', { result: resultData }); // ResultScreen으로 네비게이션, 결과 전달
   };
 
+  const handleCall = () => {
+    if (!phoneNumber) return Alert.alert('전화번호 입력!');
+    if (!socket) return Alert.alert('소켓 연결 필요!');
+    if (!userPhoneNumber) return Alert.alert('내 전화번호 정보 필요!');
+    socket.emit('call', { to: phoneNumber.trim(), from: userPhoneNumber });
+    // remotePeerId 직접 세팅 X!
+    Alert.alert('발신', `${phoneNumber} 번호로 VOIP 전화 요청`);
+  };
+
   const dynamicStyles = getDynamicStyles(isLightMode); // 동적 스타일 적용
 
   return (
@@ -120,6 +132,22 @@ const HomeScreen = () => {
             {loading ? '업로드 중...' : 'UPLOAD FILE'}
           </Text>
         </TouchableOpacity>
+      )}
+
+      {/* 전화번호 입력란과 CALL 버튼 */}
+      {showUploadButton && (
+        <>
+          <TextInput
+            style={dynamicStyles.phoneInput}
+            placeholder="전화번호 입력"
+            keyboardType="numeric"
+            value={phoneNumber}
+            onChangeText={setPhoneNumber}
+          />
+          <TouchableOpacity style={dynamicStyles.callButton} onPress={handleCall}>
+            <Text style={dynamicStyles.callButtonText}>CALL</Text>
+          </TouchableOpacity>
+        </>
       )}
 
       {/* 결과 화면 */}
@@ -184,6 +212,28 @@ const getDynamicStyles = (isLightMode) =>
       paddingHorizontal: 20,
       borderRadius: 5,
       marginTop: 10,
+    },
+    phoneInput: {
+      borderColor: isLightMode ? '#E0E0E0' : '#444',
+      borderWidth: 1,
+      padding: 10,
+      borderRadius: 5,
+      width: '80%',
+      marginTop: 15,
+      color: isLightMode ? '#000' : '#FFF',
+    },
+    callButton: {
+      backgroundColor: '#FF5252',
+      paddingVertical: 10,
+      paddingHorizontal: 30,
+      borderRadius: 5,
+      marginTop: 10,
+    },
+    callButtonText: {
+      fontSize: 16,
+      fontWeight: 'bold',
+      color: '#FFFFFF',
+      textAlign: 'center',
     },
     uploadButtonText: {
       fontSize: 16,

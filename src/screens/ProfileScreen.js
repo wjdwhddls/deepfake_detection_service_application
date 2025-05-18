@@ -36,7 +36,7 @@ const ProfileScreen = ({ setIsLoggedIn }) => {
           text: '확인',
           onPress: () => {
             setIsLoggedIn(false); // 상태 변경
-            navigation.navigate('Login'); // 로그인 화면으로 이동
+            //navigation.navigate('Login'); // 로그인 화면으로 이동
           }
         }
       ],
