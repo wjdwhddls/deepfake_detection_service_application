@@ -4,26 +4,26 @@ import { useNavigation } from '@react-navigation/native';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage'; // AsyncStorage 추가
 
-const LoginScreen = ({ setIsLoggedIn }) => {
+const LoginScreen = ({ setIsLoggedIn,  onLoginSuccess }) => {
   const navigation = useNavigation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
   const handleLogin = async () => {
-    try {
-      console.log('[로그인 시도] 요청 데이터:', {
-        user_id: email,
-        user_pw: password
-      });
+    const trimmedEmail = email.trim();
+    const trimmedPassword = password; // 비번은 일반적으로 trim하지 않습니다
 
-      const response = await axios.post('http://10.0.2.2:3000/api/auth/signin', {
-        user_id: email,
-        user_pw: password,
+    console.log('로그인 요청 값:', { user_id: trimmedEmail, user_pw: trimmedPassword });
+
+    try {
+      const response = await axios.post('http://192.168.0.108:3000/api/auth/signin', {
+        user_id: trimmedEmail,
+        user_pw: trimmedPassword,
       }, {
         headers: {
           'Content-Type': 'application/json',
         },
-        validateStatus: (status) => status < 500, // 500 미만 상태 코드 모두 허용
+        validateStatus: (status) => status < 500,
       });
 
       console.log('[서버 응답]', {
@@ -33,7 +33,7 @@ const LoginScreen = ({ setIsLoggedIn }) => {
       });
 
       // 헤더 키 대소문자 주의 (서버 설정에 따라 다름)
-      const token = response.headers['authorization'] || response.headers['Authorization'];
+      const token = response.data?.data?.accessToken || response.data?.accessToken;
 
       if (token) {
         console.log('[토큰 수신]', token);
@@ -41,11 +41,15 @@ const LoginScreen = ({ setIsLoggedIn }) => {
         // AsyncStorage에 토큰 저장
         await AsyncStorage.setItem('token', token); // 토큰 저장
         setIsLoggedIn(true);
+        onLoginSuccess(response.data.data.phoneNumber);
         navigation.navigate('Home');
         Alert.alert('로그인 성공', '환영합니다!');
       } else {
-        console.error('토큰 미수신 - 응답 헤더:', response.headers);
-        Alert.alert('로그인 실패', '서버에서 토큰을 받지 못했습니다.');
+        const msg = response.data?.message || 
+              (typeof response.data === 'string' ? response.data : '') ||
+              '서버에서 토큰을 받지 못했습니다.';
+        console.error('토큰 미수신, 응답:', response.data);
+        Alert.alert('로그인 실패', msg);
       }
 
     } catch (error) {
