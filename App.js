@@ -3,13 +3,17 @@ import { Alert } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Icon from 'react-native-vector-icons/Ionicons';
+import { createStackNavigator } from '@react-navigation/stack';
+import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
+import io from 'socket.io-client';
+
+// screens
 import HomeScreen from './src/screens/HomeScreen';
 import DashBoardScreen from './src/screens/DashBoardScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import NotificationSettingsScreen from './src/screens/NotificationSettingsScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import SignUpScreen from './src/screens/SignUpScreen';
-import { createStackNavigator } from '@react-navigation/stack';
 import ProfileEditScreen from './src/screens/ProfileEditScreen';
 import InfoScreen from './src/screens/InfoScreen';
 import FAQScreen from './src/screens/FAQScreen';
@@ -18,14 +22,17 @@ import PasswordRecoveryScreen from './src/screens/PasswordRecoveryScreen';
 import PasswordChangeScreen from './src/screens/PasswordChangeScreen';
 import LogoutScreen from './src/screens/LogoutScreen';
 import PostDetailScreen from './src/screens/PostDetailScreen';
-import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
-import io from 'socket.io-client';
+import ResultScreen from './src/screens/ResultScreen';
 
-import VoIPCall from './src/services/VoIPCall'; // 별도 분리 권장(아래 참고)
+import VoIPScreen from './src/screens/VoIPScreen';
+import CallScreen from './src/screens/CallScreen';
+import VoIPCall from './src/services/VoIPCall';
 
+// 탭/스택 선언
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
+// Dashboard Stack
 const DashBoardStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="DashBoardMain" component={DashBoardScreen} />
@@ -33,6 +40,7 @@ const DashBoardStack = () => (
   </Stack.Navigator>
 );
 
+// Profile Stack
 const ProfileStack = ({ setIsLoggedIn }) => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="ProfileMain">
@@ -47,6 +55,30 @@ const ProfileStack = ({ setIsLoggedIn }) => (
   </Stack.Navigator>
 );
 
+// Detect Stack
+const DetectStack = () => (
+  <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Screen name="DetectMain" component={HomeScreen} />
+    <Stack.Screen name="DetectDetail" component={ResultScreen} />
+  </Stack.Navigator>
+);
+
+// VoIP Stack
+const VoIPStack = ({ route }) => {
+  const socket = route?.params?.socket;
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen
+        name="VoIPScreen"
+        component={VoIPScreen}
+        initialParams={{ socket }}
+      />
+      <Stack.Screen name="CallScreen" component={CallScreen} />
+    </Stack.Navigator>
+  );
+};
+
+// MainTabNavigator
 const MainTabNavigator = ({ socket, setRemotePeerId, userPhoneNumber, setIsLoggedIn }) => {
   const { isLightMode } = useTheme();
   return (
@@ -63,9 +95,9 @@ const MainTabNavigator = ({ socket, setRemotePeerId, userPhoneNumber, setIsLogge
           }
           return <Icon name={iconName} size={size} color={color} />;
         },
-        tabBarActiveTintColor: 'white',
-        tabBarInactiveTintColor: '#b0b0b0',
-        tabBarStyle: { backgroundColor: '#333333' },
+        tabBarActiveTintColor: isLightMode ? '#007AFF' : '#FFCC00',
+        tabBarInactiveTintColor: isLightMode ? '#8e8e93' : '#BBBBBB',
+        headerShown: false,
       })}
     >
       <Tab.Screen
@@ -93,6 +125,7 @@ const MainTabNavigator = ({ socket, setRemotePeerId, userPhoneNumber, setIsLogge
   );
 };
 
+// Auth Stack
 const AuthStack = ({ setIsLoggedIn, onLoginSuccess }) => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="Login">
@@ -116,16 +149,14 @@ const App = () => {
   const [remotePeerId, setRemotePeerId] = useState(null);
   const [userPhoneNumber, setUserPhoneNumber] = useState(null);
 
-  // (1) 로그인 후 소켓 연결/전화번호 등록/시그널링 리스너 등록
+  // 로그인 성공 시 처리
   const onLoginSuccess = (phoneNumber) => {
     setUserPhoneNumber(phoneNumber);
     setIsLoggedIn(true);
-    const webSocket = io('http://192.168.0.108:3000'); // 서버 주소 확인!
+    const webSocket = io('http://192.168.0.108:3000'); // 서버 주소 확인 필요
     webSocket.on('connect', () => {
       webSocket.emit('register-user', { phoneNumber });
     });
-
-    // ★★★ 수신: 상대가 call을 보내올 때 내 remotePeerId를 세팅!
     webSocket.on('call', ({ from }) => {
       setRemotePeerId(from);
     });
@@ -133,7 +164,7 @@ const App = () => {
     setSocket(webSocket);
   };
 
-  // (2) 로그아웃 및 소켓 해제
+  // 로그아웃 및 소켓 연결 해제
   useEffect(() => {
     if (!isLoggedIn && socket) {
       socket.disconnect();
@@ -157,13 +188,9 @@ const App = () => {
           <AuthStack setIsLoggedIn={setIsLoggedIn} onLoginSuccess={onLoginSuccess} />
         )}
 
-        {/* remotePeerId가 있을때만 VoIPCall(통화 화면)이 뜸 */}
+        {/* remotePeerId가 있을 때만 VoIPCall 컴포넌트 표시 */}
         {remotePeerId && socket && (
-          <VoIPCall
-            remotePeerId={remotePeerId}
-            socket={socket}
-            onHangup={() => setRemotePeerId(null)}
-          />
+          <VoIPCall remotePeerId={remotePeerId} socket={socket} onHangup={() => setRemotePeerId(null)} />
         )}
       </NavigationContainer>
     </ThemeProvider>
