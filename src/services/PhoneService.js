@@ -4,9 +4,9 @@ export const checkPermissions = async (CallScreeningModule) => {
     if (Platform.OS === 'android') {  
         try {  
             // 기본 다이얼러 역할 요청  
-            await CallScreeningModule.requestDefaultDialerRole();  
+            //await CallScreeningModule.requestDefaultDialerRole();  
             // 통화 차단 역할 요청  
-            await CallScreeningModule.requestCallScreeningRole();  
+            //await CallScreeningModule.requestCallScreeningRole();  
 
             // 요청할 권한 목록  
             const permissions = [  
