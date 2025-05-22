@@ -1,26 +1,21 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, SafeAreaView, StyleSheet, TouchableOpacity, Image, Dimensions } from 'react-native';
+import { View, Text, SafeAreaView, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import Svg, { Path } from 'react-native-svg';
-import { useRoute, useNavigation } from '@react-navigation/native';
 
-export default function CallScreen() {
-    const route = useRoute();
-    const navigation = useNavigation();
+// callState, peer, onAccept, onReject, onHangup 모두 props로 받습니다!
+export default function CallScreen({
+    callState = 'outgoing',        // 'outgoing', 'incoming', 'active'
+    peer = { name: 'Unknown', number: '', avatar: null },
+    onAccept,
+    onReject,
+    onHangup,
+}) {
+    // 없는 번호 예시 (실제 서비스에서는 서버 등으로 체크)
+    const invalidNumbers = ['', '12345', '000'];
 
-    // 파라미터 추출
-    const {
-        callState: initialCallState = 'outgoing',
-        peer = { name: 'Unknown', number: '', avatar: null }
-    } = route.params || {};
-
-    // 없는 번호 예시 목록 (실제 서비스에서는 서버 결과 값 등으로 체크)
-    const invalidNumbers = ['', '12345', '000']; // 여기 원하는 값 추가
-
-    const [callState, setCallState] = useState(initialCallState);
+    // 타이머 설정(통화시간 표시)
     const [callTime, setCallTime] = useState(0);
-
-    // 타이머 관리
     useEffect(() => {
         let timer = null;
         if (callState === 'active') {
@@ -41,11 +36,6 @@ export default function CallScreen() {
     } else if (callState === 'outgoing') stateText = 'Calling...';
     else if (callState === 'incoming') stateText = 'Incoming call';
     else if (callState === 'active') stateText = formatTime(callTime);
-
-    // 버튼 핸들러
-    const handleAccept = () => setCallState('active');
-    const handleReject = () => navigation.navigate('VoIPScreen');
-    const handleHangup = () => navigation.navigate('VoIPScreen');
 
     return (
         <SafeAreaView style={styles.container}>
@@ -106,13 +96,13 @@ export default function CallScreen() {
                     <>
                         <TouchableOpacity
                             style={[styles.circleButton, styles.acceptButton]}
-                            onPress={handleAccept}
+                            onPress={onAccept}
                         >
                             <Icon name="call" size={28} color="#fff" />
                         </TouchableOpacity>
                         <TouchableOpacity
                             style={[styles.circleButton, styles.rejectButton]}
-                            onPress={handleReject}
+                            onPress={onReject}
                         >
                             <Icon name="close" size={32} color="#fff" />
                         </TouchableOpacity>
@@ -121,7 +111,7 @@ export default function CallScreen() {
                 {!invalidNumbers.includes(peer.number) && callState === 'outgoing' && (
                     <TouchableOpacity
                         style={[styles.circleButton, styles.rejectButton]}
-                        onPress={handleReject}
+                        onPress={onReject}
                     >
                         <Icon
                             name="call"
@@ -134,7 +124,7 @@ export default function CallScreen() {
                 {!invalidNumbers.includes(peer.number) && callState === 'active' && (
                     <TouchableOpacity
                         style={[styles.circleButton, styles.rejectButton]}
-                        onPress={handleHangup}
+                        onPress={onHangup}
                     >
                         <Icon
                             name="call"

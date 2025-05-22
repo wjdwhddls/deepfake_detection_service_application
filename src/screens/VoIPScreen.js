@@ -25,26 +25,27 @@ function formatPhoneNumber(number) {
     const onlyNumber = number.replace(/[^0-9]/g, '');
 
     if (onlyNumber.length === 11 && onlyNumber.startsWith('01')) {
-        return onlyNumber.replace(/(\d{3})(\d{4})(\d{4})/, '\$1-\$2-\$3');
+        return onlyNumber.replace(/(\d{3})(\d{4})(\d{4})/, '$1-$2-$3');
     }
     if (onlyNumber.length === 10 && onlyNumber.startsWith('02')) {
-        return onlyNumber.replace(/(\d{2})(\d{4})(\d{4})/, '\$1-\$2-\$3');
+        return onlyNumber.replace(/(\d{2})(\d{4})(\d{4})/, '$1-$2-$3');
     }
     if (onlyNumber.length === 10) {
-        return onlyNumber.replace(/(\d{3})(\d{3,4})(\d{4})/, '\$1-\$2-\$3');
+        return onlyNumber.replace(/(\d{3})(\d{3,4})(\d{4})/, '$1-$2-$3');
     }
     if (onlyNumber.length === 9) {
-        return onlyNumber.replace(/(\d{2,3})(\d{3})(\d{4})/, '\$1-\$2-\$3');
+        return onlyNumber.replace(/(\d{2,3})(\d{3})(\d{4})/, '$1-$2-$3');
     }
     return onlyNumber;
 }
 
-export default function VoIPScreen({ isFocused, socket }) {
+// 여기 추가! userPhoneNumber prop으로 받음
+export default function VoIPScreen({ isFocused, socket, userPhoneNumber }) {
     const navigation = useNavigation();
     const [dialedNumber, setDialedNumber] = useState('');
 
-    // 실제 자신의 전화번호로 대체하세요!
-    const userPhoneNumber = '010-1234-5678';
+    // 기존 하드코딩 삭제!
+    // const userPhoneNumber = '010-1234-5678';
 
     // 포커스될 때 입력값 초기화(선택 사항)
     useEffect(() => {
@@ -87,16 +88,11 @@ export default function VoIPScreen({ isFocused, socket }) {
     };
 
     const handleCall = () => {
-        // 여기서 하이픈 포함값으로 동작
         const formattedNumber = formatPhoneNumber(dialedNumber);
         if (formattedNumber) {
-            // DB, 소켓, CallScreen 이동 모두 하이픈 포함 번호로!
             if (socket && typeof socket.emit === 'function') {
                 socket.emit('call', { to: formattedNumber, from: userPhoneNumber });
             }
-            // DB 저장이 필요하면 여기도 formattedNumber로 활용!
-            // saveToDB({ phoneNumber: formattedNumber, ... });
-
             navigation.navigate('CallScreen', {
                 peer: {
                     name: '',
@@ -151,95 +147,4 @@ export default function VoIPScreen({ isFocused, socket }) {
     );
 }
 
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#FFFFFF',
-        alignItems: 'center',
-        justifyContent: 'flex-start',
-        paddingBottom: 70,
-    },
-    header: {
-        width: '100%',
-        paddingHorizontal: 20,
-        paddingTop: 20,
-        alignItems: 'center',
-    },
-    title: {
-        fontSize: 32,
-        fontWeight: 'bold',
-        color: '#1976D2',
-        textAlign: 'center',
-    },
-    dialedNumberContainer: {
-        marginTop: 20,
-        alignItems: 'center',
-    },
-    dialedNumber: {
-        fontSize: 25,
-        color: '#000000',
-        paddingBottom: 10,
-        borderBottomWidth: 2,
-        borderBottomColor: '#6A1B9A',
-        width: '60%',
-        textAlign: 'center',
-    },
-    keypadContainer: {
-        marginTop: 30,
-        width: '60%',
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        justifyContent: 'space-between',
-    },
-    keypadButton: {
-        width: '25%',
-        height: SCREEN_WIDTH * 0.15,
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderRadius: 60,
-        backgroundColor: '#E0E0E0',
-        margin: 5,
-        elevation: 2,
-    },
-    keypadButtonText: {
-        fontSize: 28,
-        color: '#000000',
-    },
-    keypadLabel: {
-        fontSize: 12,
-        color: '#000000',
-    },
-    buttonContainer: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        width: '80%',
-        marginVertical: 20,
-        alignItems: 'center',
-    },
-    backspaceButton: {
-        width: 50,
-        height: 50,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: 'transparent',
-    },
-    backspaceIconContainer: {
-        borderColor: 'white',
-        borderWidth: 1,
-        borderRadius: 25,
-        padding: 10,
-    },
-    callButton: {
-        width: 50,
-        height: 50,
-        backgroundColor: '#34B7F1',
-        borderRadius: 60,
-        alignItems: 'center',
-        justifyContent: 'center',
-        elevation: 2,
-        marginRight: 20,
-    },
-    tabBarSpace: {
-        height: 70,
-    },
-});
+// ...styles 동일
