@@ -10,7 +10,9 @@ const VoIPCall = ({ remotePeerId, socket, onHangup }) => {
   const pc = useRef(null);
   const isMounted = useRef(true);
 
-  // 1. 오디오 권한 체크 및 stream 연결
+  // remote stream 조립용
+  const remoteMediaStream = useRef(new MediaStream());
+
   useEffect(() => {
     isMounted.current = true;
 
@@ -50,31 +52,36 @@ const VoIPCall = ({ remotePeerId, socket, onHangup }) => {
     };
   }, []);
 
-  // 2. peer 연결 및 시그널링 핸들러
   useEffect(() => {
-    // 모든 준비가 안됐으면 초기화하지 않음
     if (!remotePeerId || !socket || !localStream) return;
 
     let closed = false;
-    isMounted.current = true; // 페이지 리렌더 후 복구되어야 함
+    isMounted.current = true;
 
     pc.current = new RTCPeerConnection(peerConfig);
 
-    // local 트랙 추가
     try {
       localStream.getTracks().forEach(track => pc.current.addTrack(track, localStream));
     } catch (e) {
       console.log('localStream 트랙 추가 에러:', e);
     }
 
-    // remote 스트림 핸들러 - 반드시 마운트체크
+    // remote 트랙 수집
     pc.current.ontrack = (event) => {
-      if (event?.streams?.[0] && isMounted.current) {
-        setRemoteStream(event.streams[0]);
+      if (!isMounted.current) return;
+      console.log('ontrack 발생! ', event);
+      try {
+        if (event.streams && event.streams[0]) {
+          setRemoteStream(event.streams[0]);
+        } else if (event.track) {
+          remoteMediaStream.current.addTrack(event.track);
+          setRemoteStream(remoteMediaStream.current);
+        }
+      } catch (e) {
+        console.log('ontrack 오류:', e);
       }
     };
 
-    // ICE candidate 이벤트 핸들러
     pc.current.onicecandidate = (e) => {
       if (e.candidate) {
         try {
@@ -85,7 +92,6 @@ const VoIPCall = ({ remotePeerId, socket, onHangup }) => {
       }
     };
 
-    // Socket 이벤트 safely 등록
     const handleOffer = async ({ offer, from }) => {
       try {
         if (closed || !isMounted.current || !pc.current) return;
@@ -126,7 +132,6 @@ const VoIPCall = ({ remotePeerId, socket, onHangup }) => {
     socket.on('answer', handleAnswer);
     socket.on('ice', handleIce);
 
-    // 내가 offer 생성 주체
     if (socket.id !== remotePeerId) {
       (async () => {
         try {
@@ -142,7 +147,6 @@ const VoIPCall = ({ remotePeerId, socket, onHangup }) => {
       })();
     }
 
-    // Clean up
     return () => {
       closed = true;
       isMounted.current = false;
@@ -159,7 +163,7 @@ const VoIPCall = ({ remotePeerId, socket, onHangup }) => {
       }
       if (localStream && localStream.release) {
         try {
-          localStream.release(); // Android는 해제가 필요할 수 있음
+          localStream.release();
         } catch (e) {}
       }
       setLocalStream(null);
@@ -168,7 +172,6 @@ const VoIPCall = ({ remotePeerId, socket, onHangup }) => {
     };
   }, [remotePeerId, socket, localStream]);
 
-  // 3. 통화종료 (상위 전달)
   const hangup = () => {
     try {
       if (pc.current) pc.current.close();
@@ -185,6 +188,7 @@ const VoIPCall = ({ remotePeerId, socket, onHangup }) => {
     <View style={styles.callContainer}>
       <Text style={{ color: '#fff', fontSize: 20 }}>VOIP 통화 연결됨</Text>
       <Button title="통화 종료" onPress={hangup} color="#f44" />
+      {remoteStream && <Text style={{color: '#fff'}}>상대의 오디오 스트림이 들어옴!</Text>}
     </View>
   );
 };
