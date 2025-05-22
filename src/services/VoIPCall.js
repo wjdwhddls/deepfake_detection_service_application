@@ -1,232 +1,210 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, SafeAreaView, StyleSheet, TouchableOpacity, Image } from 'react-native';
-import Icon from 'react-native-vector-icons/Ionicons';
-import Svg, { Path } from 'react-native-svg';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, Button, StyleSheet, Alert, Platform, PermissionsAndroid } from 'react-native';
+import { mediaDevices, RTCPeerConnection, RTCSessionDescription, MediaStream } from 'react-native-webrtc';
 
-// callState, peer, onAccept, onReject, onHangup 모두 props로 받습니다!
-export default function CallScreen({
-    callState = 'outgoing',        // 'outgoing', 'incoming', 'active'
-    peer = { name: 'Unknown', number: '', avatar: null },
-    onAccept,
-    onReject,
-    onHangup,
-}) {
-    // 없는 번호 예시 (실제 서비스에서는 서버 등으로 체크)
-    const invalidNumbers = ['', '12345', '000'];
+const peerConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
-    // 타이머 설정(통화시간 표시)
-    const [callTime, setCallTime] = useState(0);
-    useEffect(() => {
-        let timer = null;
-        if (callState === 'active') {
-            timer = setInterval(() => setCallTime(t => t + 1), 1000);
-        } else {
-            setCallTime(0);
+const VoIPCall = ({ remotePeerId, socket, onHangup, isCaller }) => {
+  const [localStream, setLocalStream] = useState(null);
+  const [remoteStream, setRemoteStream] = useState(null);
+  const pc = useRef(null);
+  const isMounted = useRef(true);
+
+  // remote stream 조립용
+  const remoteMediaStream = useRef(new MediaStream());
+
+  // 1. 마이크 권한 및 오디오 스트림 얻기
+  useEffect(() => {
+    isMounted.current = true;
+
+    async function requestAudioPermissionAndStream() {
+      if (Platform.OS === 'android') {
+        try {
+          const granted = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+            { title: '마이크 권한', message: '음성 통화에 마이크 권한이 필요합니다.' }
+          );
+          if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+            if (isMounted.current)
+              Alert.alert('마이크 권한 필요', '마이크 권한을 허용해 주세요.');
+            return;
+          }
+        } catch (e) {
+          if (isMounted.current)
+            Alert.alert('권한 오류', e?.message || '권한 요청 오류');
+          return;
         }
-        return () => timer && clearInterval(timer);
-    }, [callState]);
+      }
+      try {
+        const stream = await mediaDevices.getUserMedia({ audio: true });
+        if (isMounted.current) setLocalStream(stream);
+      } catch (e) {
+        if (isMounted.current) {
+          Alert.alert('마이크 오류', e?.message || 'Failed to access mic');
+          console.log('마이크 오류', e);
+        }
+      }
+    }
 
-    const formatTime = sec =>
-        `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
+    requestAudioPermissionAndStream();
 
-    // 상태 메시지
-    let stateText = '';
-    if (invalidNumbers.includes(peer.number)) {
-        stateText = '없는 번호입니다';
-    } else if (callState === 'outgoing') stateText = 'Calling...';
-    else if (callState === 'incoming') stateText = 'Incoming call';
-    else if (callState === 'active') stateText = formatTime(callTime);
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
-    return (
-        <SafeAreaView style={styles.container}>
-            {/* 배경 파동 */}
-            <View style={styles.pulseLayer} pointerEvents="none">
-                <Svg
-                    width={200}
-                    height={80}
-                    style={{ position: 'absolute', left: 30, top: 65 }}
-                    fill="none"
-                >
-                    <Path
-                        d="M0 50 Q40 16, 60 50 Q80 90, 110 47 Q130 16, 160 50 Q180 66,200 16"
-                        stroke="#56ccff"
-                        strokeWidth={7}
-                        strokeLinecap="round"
-                        opacity={0.17}
-                    />
-                </Svg>
-                <Svg
-                    width={120}
-                    height={60}
-                    style={{ position: 'absolute', right: 30, top: 150 }}
-                    fill="none"
-                >
-                    <Path
-                        d="M0 40 Q20 10, 40 40 Q60 60, 120 20"
-                        stroke="#297afd"
-                        strokeWidth={5}
-                        strokeLinecap="round"
-                        opacity={0.13}
-                    />
-                </Svg>
-            </View>
+  // 2. peerConnection과 시그널링
+  useEffect(() => {
+    if (!remotePeerId || !socket || !localStream) return;
 
-            {/* 본문 */}
-            <View style={styles.centerArea}>
-                <View style={styles.profileContainer}>
-                    {peer.avatar ? (
-                        <Image source={peer.avatar} style={styles.avatar} />
-                    ) : (
-                        <View style={styles.avatarFallback}>
-                            <Icon name="person" size={58} color="#93d5f6" />
-                        </View>
-                    )}
-                    <Text style={styles.name}>
-                        {peer.name || peer.number || 'Unknown'}
-                    </Text>
-                    <Text style={styles.number}>{peer.number}</Text>
-                </View>
+    let closed = false;
+    isMounted.current = true;
 
-                <Text style={styles.statusText}>{stateText}</Text>
-            </View>
+    pc.current = new RTCPeerConnection(peerConfig);
 
-            {/* 버튼 */}
-            <View style={styles.buttonRow}>
-                {!invalidNumbers.includes(peer.number) && callState === 'incoming' && (
-                    <>
-                        <TouchableOpacity
-                            style={[styles.circleButton, styles.acceptButton]}
-                            onPress={onAccept}
-                        >
-                            <Icon name="call" size={28} color="#fff" />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.circleButton, styles.rejectButton]}
-                            onPress={onReject}
-                        >
-                            <Icon name="close" size={32} color="#fff" />
-                        </TouchableOpacity>
-                    </>
-                )}
-                {!invalidNumbers.includes(peer.number) && callState === 'outgoing' && (
-                    <TouchableOpacity
-                        style={[styles.circleButton, styles.rejectButton]}
-                        onPress={onReject}
-                    >
-                        <Icon
-                            name="call"
-                            size={28}
-                            color="#fff"
-                            style={{ transform: [{ rotate: '135deg' }] }}
-                        />
-                    </TouchableOpacity>
-                )}
-                {!invalidNumbers.includes(peer.number) && callState === 'active' && (
-                    <TouchableOpacity
-                        style={[styles.circleButton, styles.rejectButton]}
-                        onPress={onHangup}
-                    >
-                        <Icon
-                            name="call"
-                            size={28}
-                            color="#fff"
-                            style={{ transform: [{ rotate: '135deg' }] }}
-                        />
-                    </TouchableOpacity>
-                )}
-            </View>
-        </SafeAreaView>
-    );
-}
+    try {
+      localStream.getTracks().forEach(track => pc.current.addTrack(track, localStream));
+    } catch (e) {
+      console.log('localStream 트랙 추가 에러:', e);
+    }
+
+    // remote 트랙 수집
+    pc.current.ontrack = (event) => {
+      if (!isMounted.current) return;
+      console.log('ontrack 발생! ', event);
+      try {
+        if (event.streams && event.streams[0]) {
+          setRemoteStream(event.streams[0]);
+        } else if (event.track) {
+          remoteMediaStream.current.addTrack(event.track);
+          setRemoteStream(remoteMediaStream.current);
+        }
+      } catch (e) {
+        console.log('ontrack 오류:', e);
+      }
+    };
+
+    pc.current.onicecandidate = (e) => {
+      if (e.candidate) {
+        try {
+          socket.emit('ice', { candidate: e.candidate, to: remotePeerId, from: socket.id });
+        } catch (e) {
+          console.log('ICE emit 오류:', e);
+        }
+      }
+    };
+
+    // --- 소켓 시그널 핸들러들 ---
+    const handleOffer = async ({ offer, from }) => {
+      try {
+        if (closed || !isMounted.current || !pc.current) return;
+        await pc.current.setRemoteDescription(new RTCSessionDescription(offer));
+        const answer = await pc.current.createAnswer();
+        await pc.current.setLocalDescription(answer);
+        socket.emit('answer', { answer, to: from, from: socket.id });
+        console.log('offer 수신→answer 생성 후 전송');
+      } catch (e) {
+        console.log('offer 핸들러 오류:', e?.message ?? e);
+        if (isMounted.current)
+          Alert.alert('offer 오류', e?.message ?? '오퍼 수신 처리 중 에러');
+      }
+    };
+    const handleAnswer = async ({ answer }) => {
+      try {
+        if (closed || !isMounted.current || !pc.current) return;
+        await pc.current.setRemoteDescription(new RTCSessionDescription(answer));
+        console.log('answer 수신 처리 완료');
+      } catch (e) {
+        console.log('answer 핸들러 오류:', e?.message ?? e);
+        if (isMounted.current)
+          Alert.alert('answer 오류', e?.message ?? 'answer 처리 중 에러');
+      }
+    };
+    const handleIce = async ({ candidate }) => {
+      try {
+        if (candidate && pc.current && isMounted.current) {
+          await pc.current.addIceCandidate(candidate);
+          console.log('ICE candidate 추가');
+        }
+      } catch (e) {
+        console.log('ice 핸들러 오류:', e?.message ?? e);
+      }
+    };
+
+    socket.on('offer', handleOffer);
+    socket.on('answer', handleAnswer);
+    socket.on('ice', handleIce);
+
+    // --- 발신자(Caller)만 offer 생성 ---
+    if (isCaller) {
+      (async () => {
+        try {
+          const offer = await pc.current.createOffer();
+          await pc.current.setLocalDescription(offer);
+          socket.emit('offer', { offer, to: remotePeerId, from: socket.id });
+          console.log('발신측에서 offer 생성/전송');
+        } catch (e) {
+          console.log('offer 생성/emit 오류:', e?.message ?? e);
+          if (isMounted.current)
+            Alert.alert('offer 생성/송신 오류', e?.message ?? 'offer 과정 중 에러');
+        }
+      })();
+    }
+    // 수신자는 절대 offer를 만들지 않는다!
+
+    return () => {
+      closed = true;
+      isMounted.current = false;
+      socket.off('offer', handleOffer);
+      socket.off('answer', handleAnswer);
+      socket.off('ice', handleIce);
+      if (pc.current) {
+        try {
+          pc.current.ontrack = null;
+          pc.current.onicecandidate = null;
+          pc.current.close();
+        } catch (e) {}
+        pc.current = null;
+      }
+      if (localStream && localStream.release) {
+        try {
+          localStream.release();
+        } catch (e) {}
+      }
+      setLocalStream(null);
+      setRemoteStream(null);
+      console.log('peerConnection/시그널링 cleanup');
+    };
+  }, [remotePeerId, socket, localStream, isCaller]);
+
+  // 3. 통화 종료
+  const hangup = () => {
+    try {
+      if (pc.current) pc.current.close();
+      setLocalStream(null);
+      setRemoteStream(null);
+      if (onHangup) onHangup();
+      console.log('수동 통화 종료');
+    } catch (e) {
+      console.log('hangup 오류:', e?.message ?? e);
+    }
+  };
+
+  return (
+    <View style={styles.callContainer}>
+      <Text style={{ color: '#fff', fontSize: 20 }}>VOIP 통화 연결됨 ({isCaller ? '발신자' : '수신자'})</Text>
+      <Button title="통화 종료" onPress={hangup} color="#f44" />
+      {remoteStream && <Text style={{color: '#fff'}}>상대의 오디오 스트림이 들어옴!</Text>}
+    </View>
+  );
+};
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#16181d',
-        position: 'relative',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-    },
-    pulseLayer: {
-        ...StyleSheet.absoluteFillObject,
-        zIndex: 1,
-    },
-    centerArea: {
-        flex: 1,
-        width: '100%',
-        justifyContent: 'center',
-        alignItems: 'center',
-        zIndex: 2,
-    },
-    profileContainer: {
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 12,
-    },
-    avatar: {
-        width: 110,
-        height: 110,
-        borderRadius: 55,
-        borderWidth: 4,
-        borderColor: '#47a9fa',
-        backgroundColor: '#22293d',
-        marginBottom: 8,
-    },
-    avatarFallback: {
-        width: 110,
-        height: 110,
-        borderRadius: 55,
-        backgroundColor: '#22293d',
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 4,
-        borderColor: '#47a9fa',
-        marginBottom: 8,
-    },
-    name: {
-        fontSize: 22,
-        fontWeight: '600',
-        color: '#eaf6ff',
-        marginTop: 8,
-        textAlign: 'center',
-    },
-    number: {
-        fontSize: 16,
-        color: '#73b0f7',
-        marginBottom: 6,
-        textAlign: 'center',
-    },
-    statusText: {
-        fontSize: 20,
-        color: '#71f4ff',
-        marginVertical: 20,
-        textAlign: 'center',
-    },
-    buttonRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingBottom: 36,
-        zIndex: 3,
-        gap: 30,
-    },
-    circleButton: {
-        width: 70,
-        height: 70,
-        borderRadius: 35,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginHorizontal: 18,
-        shadowColor: '#111',
-        shadowOffset: { width: 1, height: 3 },
-        shadowOpacity: 0.22,
-        shadowRadius: 7,
-        elevation: 5,
-    },
-    acceptButton: {
-        backgroundColor: '#29c98e',
-    },
-    rejectButton: {
-        backgroundColor: '#ef4c54',
-    },
+  callContainer: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    zIndex: 99, backgroundColor: '#222c', justifyContent: 'center', alignItems: 'center',
+  },
 });
+
+export default VoIPCall;
