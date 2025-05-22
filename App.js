@@ -7,7 +7,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
 import io from 'socket.io-client';
 
-import { checkPermissions } from './src/services/PhoneService'; // <--- 권한 체크 함수 추가 (필수)
+import { checkPermissions } from './src/services/PhoneService';
 
 // screens
 import HomeScreen from './src/screens/HomeScreen';
@@ -30,7 +30,7 @@ import VoIPScreen from './src/screens/VoIPScreen';
 import CallScreen from './src/screens/CallScreen';
 import VoIPCall from './src/services/VoIPCall';
 
-// 탭/스택 선언
+// Stack 선언
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
@@ -65,22 +65,17 @@ const DetectStack = () => (
   </Stack.Navigator>
 );
 
-// VoIP Stack
-const VoIPStack = ({ route }) => {
-  const socket = route?.params?.socket;
-  return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen
-        name="VoIPScreen"
-        component={VoIPScreen}
-        initialParams={{ socket }}
-      />
-      <Stack.Screen name="CallScreen" component={CallScreen} />
-    </Stack.Navigator>
-  );
-};
+// VoIP Stack - socket을 직접 props로 전달해 children 패턴으로 연결!
+const VoIPStack = ({ socket }) => (
+  <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Screen name="VoIPScreen">
+      {props => <VoIPScreen {...props} socket={socket} />}
+    </Stack.Screen>
+    <Stack.Screen name="CallScreen" component={CallScreen} />
+  </Stack.Navigator>
+);
 
-// MainTabNavigator
+// MainTabNavigator - VoIPStack에 socket을 props로만 전달!
 const MainTabNavigator = ({ socket, setRemotePeerId, userPhoneNumber, setIsLoggedIn }) => {
   const { isLightMode } = useTheme();
   return (
@@ -117,8 +112,8 @@ const MainTabNavigator = ({ socket, setRemotePeerId, userPhoneNumber, setIsLogge
       />
       <Tab.Screen
         name="VoIP"
-        component={VoIPStack}
-        initialParams={{ socket }} // VoIPStack에 socket 전달
+        children={() => <VoIPStack socket={socket} />}
+        options={{ headerShown: false }}
       />
       <Tab.Screen
         name="DashBoard"
