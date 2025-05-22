@@ -87,9 +87,11 @@ const MainTabNavigator = ({ socket, setRemotePeerId, userPhoneNumber, setIsLogge
         tabBarIcon: ({ focused, color, size }) => {
           let iconName;
           if (route.name === 'Home') {
-            iconName = focused ? 'shield-checkmark' : 'shield-checkmark-outline';
+            iconName = focused ? 'home' : 'home-outline';
+          } else if (route.name === 'VoIP') {
+            iconName = focused ? 'call' : 'call-outline';
           } else if (route.name === 'DashBoard') {
-            iconName = focused ? 'chatbubbles' : 'chatbubble-outline';
+            iconName = focused ? 'stats-chart' : 'stats-chart-outline';
           } else if (route.name === 'Profile') {
             iconName = focused ? 'person' : 'person-outline';
           }
@@ -110,6 +112,11 @@ const MainTabNavigator = ({ socket, setRemotePeerId, userPhoneNumber, setIsLogge
           />
         )}
         options={{ headerShown: false }}
+      />
+      <Tab.Screen
+        name="VoIP"
+        component={VoIPStack}
+        initialParams={{ socket }} // VoIPStack에 socket 전달
       />
       <Tab.Screen
         name="DashBoard"
@@ -153,7 +160,7 @@ const App = () => {
   const onLoginSuccess = (phoneNumber) => {
     setUserPhoneNumber(phoneNumber);
     setIsLoggedIn(true);
-    const webSocket = io('http://192.168.0.108:3000'); // 서버 주소 확인 필요
+    const webSocket = io('http://10.0.2.2:3000'); // 서버 주소 확인 필요
     webSocket.on('connect', () => {
       webSocket.emit('register-user', { phoneNumber });
     });
