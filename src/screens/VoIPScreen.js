@@ -43,12 +43,37 @@ export default function VoIPScreen({ isFocused, socket }) {
     const navigation = useNavigation();
     const [dialedNumber, setDialedNumber] = useState('');
 
+    // 실제 자신의 전화번호로 대체하세요!
+    const userPhoneNumber = '010-1234-5678';
+
     // 포커스될 때 입력값 초기화(선택 사항)
     useEffect(() => {
         if (isFocused) {
             setDialedNumber('');
         }
     }, [isFocused]);
+
+    // 전화 수신시 CallScreen으로 이동
+    useEffect(() => {
+        if (!socket) return;
+
+        const onCall = ({ from }) => {
+            navigation.navigate('CallScreen', {
+                peer: {
+                    name: '', // 필요시 상대 이름 조회 등 추가 가능
+                    number: from,
+                },
+                callState: 'incoming',
+            });
+        };
+
+        socket.on('call', onCall);
+
+        // clean up
+        return () => {
+            socket.off('call', onCall);
+        };
+    }, [socket, navigation]);
 
     const handleKeyPress = (number) => {
         const onlyNumber = dialedNumber.replace(/[^0-9]/g, '');
@@ -67,8 +92,6 @@ export default function VoIPScreen({ isFocused, socket }) {
         if (formattedNumber) {
             // DB, 소켓, CallScreen 이동 모두 하이픈 포함 번호로!
             if (socket && typeof socket.emit === 'function') {
-                // 실제 자신의 전화번호로 바꿔주세요!
-                const userPhoneNumber = '010-1234-5678'; 
                 socket.emit('call', { to: formattedNumber, from: userPhoneNumber });
             }
             // DB 저장이 필요하면 여기도 formattedNumber로 활용!
