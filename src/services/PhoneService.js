@@ -1,6 +1,6 @@
 import { PermissionsAndroid, Platform } from "react-native";  
 
-export const checkPermissions = async (CallScreeningModule) => {  
+export const checkPermissions = async () => {  
     if (Platform.OS === 'android') {  
         try {  
             // 기본 다이얼러 역할 요청  

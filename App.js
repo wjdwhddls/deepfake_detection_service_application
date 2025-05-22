@@ -1,11 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { Alert } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { Alert, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { createStackNavigator } from '@react-navigation/stack';
 import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
 import io from 'socket.io-client';
+
+// 권한 체크 함수 (import 필요)
+import { checkPermissions } from './src/services/PhoneService';
 
 // screens
 import HomeScreen from './src/screens/HomeScreen';
@@ -24,7 +27,6 @@ import LogoutScreen from './src/screens/LogoutScreen';
 import PostDetailScreen from './src/screens/PostDetailScreen';
 import ResultScreen from './src/screens/ResultScreen';
 
-import VoIPScreen from './src/screens/VoIPScreen';
 import CallScreen from './src/screens/CallScreen';
 import VoIPCall from './src/services/VoIPCall';
 
@@ -63,21 +65,6 @@ const DetectStack = () => (
   </Stack.Navigator>
 );
 
-// VoIP Stack
-const VoIPStack = ({ route }) => {
-  const socket = route?.params?.socket;
-  return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen
-        name="VoIPScreen"
-        component={VoIPScreen}
-        initialParams={{ socket }}
-      />
-      <Stack.Screen name="CallScreen" component={CallScreen} />
-    </Stack.Navigator>
-  );
-};
-
 // MainTabNavigator
 const MainTabNavigator = ({ socket, setRemotePeerId, userPhoneNumber, setIsLoggedIn }) => {
   const { isLightMode } = useTheme();
@@ -85,14 +72,18 @@ const MainTabNavigator = ({ socket, setRemotePeerId, userPhoneNumber, setIsLogge
     <Tab.Navigator
       screenOptions={({ route }) => ({
         tabBarIcon: ({ focused, color, size }) => {
-          let iconName;
-          if (route.name === 'Home') {
-            iconName = focused ? 'shield-checkmark' : 'shield-checkmark-outline';
-          } else if (route.name === 'DashBoard') {
-            iconName = focused ? 'chatbubbles' : 'chatbubble-outline';
-          } else if (route.name === 'Profile') {
-            iconName = focused ? 'person' : 'person-outline';
-          }
+          let iconName =
+            route.name === 'Home'
+              ? focused
+                ? 'shield-checkmark'
+                : 'shield-checkmark-outline'
+              : route.name === 'DashBoard'
+              ? focused
+                ? 'chatbubbles'
+                : 'chatbubble-outline'
+              : focused
+              ? 'person'
+              : 'person-outline';
           return <Icon name={iconName} size={size} color={color} />;
         },
         tabBarActiveTintColor: isLightMode ? '#007AFF' : '#FFCC00',
@@ -149,30 +140,62 @@ const App = () => {
   const [remotePeerId, setRemotePeerId] = useState(null);
   const [userPhoneNumber, setUserPhoneNumber] = useState(null);
 
-  // 로그인 성공 시 처리
+  // 앱 시작 시 권한 체크
+  useEffect(() => {
+    checkPermissions(); // 반드시 호출
+  }, []);
+
+  // 안전하게 기존 소켓 연결 해제
+  useEffect(() => {
+    if (!isLoggedIn && socket) {
+      try {
+        socket.disconnect();
+        setSocket(null);
+        setUserPhoneNumber(null);
+        setRemotePeerId(null);
+      } catch (e) {
+        console.log('[소켓 정리중 오류]', e);
+      }
+    }
+    // eslint-disable-next-line
+  }, [isLoggedIn]);
+
+  // 로그인 성공 시, 소켓 연결 및 이벤트 등록
   const onLoginSuccess = (phoneNumber) => {
     setUserPhoneNumber(phoneNumber);
     setIsLoggedIn(true);
-    const webSocket = io('http://192.168.0.108:3000'); // 서버 주소 확인 필요
+
+    if (socket) {
+      try {
+        socket.disconnect();
+      } catch (e) {}
+    }
+
+    const webSocket = io('http://192.168.0.223:3000', {
+      transports: ['websocket'],
+      forceNew: true, // 항상 새로운 연결 강제
+    });
+
     webSocket.on('connect', () => {
       webSocket.emit('register-user', { phoneNumber });
     });
     webSocket.on('call', ({ from }) => {
-      setRemotePeerId(from);
+      if (from !== phoneNumber) setRemotePeerId(from); // 자기 자신 방지
+    });
+    webSocket.on('disconnect', () => {
+      console.log('소켓 disconnected.');
+    });
+    webSocket.on('connect_error', (err) => {
+      Alert.alert('소켓 연결 오류', err?.message ?? '서버 연결 실패');
     });
 
     setSocket(webSocket);
   };
 
-  // 로그아웃 및 소켓 연결 해제
-  useEffect(() => {
-    if (!isLoggedIn && socket) {
-      socket.disconnect();
-      setSocket(null);
-      setUserPhoneNumber(null);
-      setRemotePeerId(null);
-    }
-  }, [isLoggedIn]);
+  // VoIPCall hangup 핸들러
+  const handleHangup = () => {
+    setRemotePeerId(null);
+  };
 
   return (
     <ThemeProvider>
@@ -188,9 +211,13 @@ const App = () => {
           <AuthStack setIsLoggedIn={setIsLoggedIn} onLoginSuccess={onLoginSuccess} />
         )}
 
-        {/* remotePeerId가 있을 때만 VoIPCall 컴포넌트 표시 */}
-        {remotePeerId && socket && (
-          <VoIPCall remotePeerId={remotePeerId} socket={socket} onHangup={() => setRemotePeerId(null)} />
+        {/* remotePeerId와 전화번호 모두 체크 (내가 아닌 상대방 연결시에만) */}
+        {remotePeerId && socket && remotePeerId !== userPhoneNumber && (
+          <VoIPCall
+            remotePeerId={remotePeerId}
+            socket={socket}
+            onHangup={handleHangup}
+          />
         )}
       </NavigationContainer>
     </ThemeProvider>
