@@ -147,4 +147,95 @@ export default function VoIPScreen({ isFocused, socket, userPhoneNumber }) {
     );
 }
 
-// ...styles 동일
+const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+        backgroundColor: '#FFFFFF',
+        alignItems: 'center',
+        justifyContent: 'flex-start',
+        paddingBottom: 70,
+    },
+    header: {
+        width: '100%',
+        paddingHorizontal: 20,
+        paddingTop: 20,
+        alignItems: 'center',
+    },
+    title: {
+        fontSize: 32,
+        fontWeight: 'bold',
+        color: '#1976D2',
+        textAlign: 'center',
+    },
+    dialedNumberContainer: {
+        marginTop: 20,
+        alignItems: 'center',
+    },
+    dialedNumber: {
+        fontSize: 25,
+        color: '#000000',
+        paddingBottom: 10,
+        borderBottomWidth: 2,
+        borderBottomColor: '#6A1B9A',
+        width: '60%',
+        textAlign: 'center',
+    },
+    keypadContainer: {
+        marginTop: 30,
+        width: '60%',
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+    },
+    keypadButton: {
+        width: '25%',
+        height: SCREEN_WIDTH * 0.15,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderRadius: 60,
+        backgroundColor: '#E0E0E0',
+        margin: 5,
+        elevation: 2,
+    },
+    keypadButtonText: {
+        fontSize: 28,
+        color: '#000000',
+    },
+    keypadLabel: {
+        fontSize: 12,
+        color: '#000000',
+    },
+    buttonContainer: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        width: '80%',
+        marginVertical: 20,
+        alignItems: 'center',
+    },
+    backspaceButton: {
+        width: 50,
+        height: 50,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'transparent',
+    },
+    backspaceIconContainer: {
+        borderColor: 'white',
+        borderWidth: 1,
+        borderRadius: 25,
+        padding: 10,
+    },
+    callButton: {
+        width: 50,
+        height: 50,
+        backgroundColor: '#34B7F1',
+        borderRadius: 60,
+        alignItems: 'center',
+        justifyContent: 'center',
+        elevation: 2,
+        marginRight: 20,
+    },
+    tabBarSpace: {
+        height: 70,
+    },
+});
