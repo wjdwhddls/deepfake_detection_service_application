@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Alert } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -66,14 +66,15 @@ const DetectStack = () => (
 );
 
 // VoIP Stack - socket과 userPhoneNumber를 props로 직접 전달!
-const VoIPStack = ({ socket, userPhoneNumber }) => (
+const VoIPStack = ({ socket, userPhoneNumber, onStartCall }) => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="VoIPScreen">
       {props => (
         <VoIPScreen
           {...props}
           socket={socket}
-          userPhoneNumber={userPhoneNumber}
+          userPhoneNumber={userPhoneNumber} // userPhoneNumber prop 전달
+          onStartCall={onStartCall}
         />
       )}
     </Stack.Screen>
@@ -81,12 +82,13 @@ const VoIPStack = ({ socket, userPhoneNumber }) => (
   </Stack.Navigator>
 );
 
-// MainTabNavigator - VoIPStack에 socket과 userPhoneNumber를 모두 props로 전달!
+// MainTabNavigator에서 VoIP 기능을 위한 콜백 패턴 적용
 const MainTabNavigator = ({
   socket,
   setRemotePeerId,
   userPhoneNumber,
   setIsLoggedIn,
+  onStartCall
 }) => {
   const { isLightMode } = useTheme();
   return (
@@ -127,6 +129,7 @@ const MainTabNavigator = ({
           <VoIPStack
             socket={socket}
             userPhoneNumber={userPhoneNumber}
+            onStartCall={onStartCall}
           />
         )}
         options={{ headerShown: false }}
@@ -166,13 +169,17 @@ const AuthStack = ({ setIsLoggedIn, onLoginSuccess }) => (
 const App = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [socket, setSocket] = useState(null);
+
+  // 통화 관련 상태
   const [remotePeerId, setRemotePeerId] = useState(null);
   const [userPhoneNumber, setUserPhoneNumber] = useState(null);
 
-  // 전화를 받은 쪽에서 isCaller를 false로 전달
-  const [voipIncoming, setVoipIncoming] = useState(false);
+  // 통화 상태: 'idle' | 'outgoing' | 'incoming' | 'connecting' | 'active' | 'ended'
+  const [callState, setCallState] = useState('idle');
+  const [callModalVisible, setCallModalVisible] = useState(false);
+  const [isCaller, setIsCaller] = useState(false);
+  const [callPeer, setCallPeer] = useState({ name: '', number: '', avatar: null });
 
-  // 앱 최초 실행 시 권한 요청(마이크 등)
   useEffect(() => {
     checkPermissions();
   }, []);
@@ -182,15 +189,18 @@ const App = () => {
     setUserPhoneNumber(phoneNumber);
     setIsLoggedIn(true);
 
-    const webSocket = io('http://192.168.0.223:3000'); // ※ 실제 서버 주소로 변경 필요
-
+    const webSocket = io('http://192.168.0.223:3000'); // 실제 주소로 대체!
     webSocket.on('connect', () => {
       webSocket.emit('register-user', { phoneNumber });
     });
 
-    webSocket.on('call', ({ from }) => {
+    // 수신 이벤트 - 상대가 call할 경우
+    webSocket.on('call', ({ from, number, name, avatar }) => {
       setRemotePeerId(from);
-      setVoipIncoming(true); // 수신측임을 플래그!
+      setCallPeer({ name, number, avatar });
+      setCallState('incoming');
+      setCallModalVisible(true);
+      setIsCaller(false);
     });
 
     setSocket(webSocket);
@@ -203,14 +213,55 @@ const App = () => {
       setSocket(null);
       setUserPhoneNumber(null);
       setRemotePeerId(null);
-      setVoipIncoming(false);
+      setIsCaller(false);
+      setCallState('idle');
+      setCallModalVisible(false);
+      setCallPeer({ name: '', number: '', avatar: null });
     }
   }, [isLoggedIn]);
 
-  // 통화 종료 후 리셋 핸들러
-  const handleHangup = () => {
+  // 발신 통화 시작
+  const handleStartCall = (targetPeerId, peerInfo) => {
+    setRemotePeerId(targetPeerId);
+    setCallPeer(peerInfo);
+    setCallState('outgoing');
+    setCallModalVisible(true);
+    setIsCaller(true);
+    if (socket && userPhoneNumber && targetPeerId) {
+      socket.emit('call', {
+        to: targetPeerId,
+        from: socket.id,
+        number: userPhoneNumber,
+        name: userPhoneNumber,
+        avatar: null
+      });
+    }
+  };
+
+  // CallScreen에서 수락
+  const handleAccept = () => {
+    setCallState('connecting');
+  };
+
+  // CallScreen에서 거절 or 종료
+  const handleRejectOrHangup = () => {
+    setCallState('ended');
+    setCallModalVisible(false);
     setRemotePeerId(null);
-    setVoipIncoming(false);
+    setIsCaller(false);
+  };
+
+  // VoIPCall에서 remoteStream(연결) 성공
+  const handleRemoteStream = (stream) => {
+    setCallState('active');
+  };
+
+  // VoIPCall에서 hangup(종료) 시
+  const handleHangup = () => {
+    setCallState('ended');
+    setCallModalVisible(false);
+    setRemotePeerId(null);
+    setIsCaller(false);
   };
 
   return (
@@ -222,20 +273,28 @@ const App = () => {
             setRemotePeerId={setRemotePeerId}
             userPhoneNumber={userPhoneNumber}
             setIsLoggedIn={setIsLoggedIn}
+            onStartCall={handleStartCall}
           />
         ) : (
           <AuthStack setIsLoggedIn={setIsLoggedIn} onLoginSuccess={onLoginSuccess} />
         )}
-
-        {/* remotePeerId가 생겼을 때만 VoIPCall 모달 표시
-            수신측(isCaller=false)로 동작 */}
-        {remotePeerId && socket && (
-          <VoIPCall 
-            remotePeerId={remotePeerId} 
-            socket={socket} 
-            onHangup={handleHangup}
-            isCaller={false} // 전화받는 쪽(수신자)에서는 isCaller를 false로
-          />
+        {callModalVisible && remotePeerId && socket && (
+          <>
+            <CallScreen
+              callState={callState}
+              peer={callPeer}
+              onAccept={handleAccept}
+              onReject={handleRejectOrHangup}
+              onHangup={handleRejectOrHangup}
+            />
+            <VoIPCall
+              remotePeerId={remotePeerId}
+              socket={socket}
+              isCaller={isCaller}
+              onHangup={handleHangup}
+              onRemoteStream={handleRemoteStream}
+            />
+          </>
         )}
       </NavigationContainer>
     </ThemeProvider>
