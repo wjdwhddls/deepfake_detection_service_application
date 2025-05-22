@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Alert } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -65,18 +65,29 @@ const DetectStack = () => (
   </Stack.Navigator>
 );
 
-// VoIP Stack - socket을 직접 props로 전달해 children 패턴으로 연결!
-const VoIPStack = ({ socket }) => (
+// VoIP Stack - socket과 userPhoneNumber를 props로 직접 전달!
+const VoIPStack = ({ socket, userPhoneNumber }) => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="VoIPScreen">
-      {props => <VoIPScreen {...props} socket={socket} />}
+      {props => (
+        <VoIPScreen
+          {...props}
+          socket={socket}
+          userPhoneNumber={userPhoneNumber}
+        />
+      )}
     </Stack.Screen>
     <Stack.Screen name="CallScreen" component={CallScreen} />
   </Stack.Navigator>
 );
 
-// MainTabNavigator - VoIPStack에 socket을 props로만 전달!
-const MainTabNavigator = ({ socket, setRemotePeerId, userPhoneNumber, setIsLoggedIn }) => {
+// MainTabNavigator - VoIPStack에 socket과 userPhoneNumber를 모두 props로 전달!
+const MainTabNavigator = ({
+  socket,
+  setRemotePeerId,
+  userPhoneNumber,
+  setIsLoggedIn,
+}) => {
   const { isLightMode } = useTheme();
   return (
     <Tab.Navigator
@@ -112,7 +123,12 @@ const MainTabNavigator = ({ socket, setRemotePeerId, userPhoneNumber, setIsLogge
       />
       <Tab.Screen
         name="VoIP"
-        children={() => <VoIPStack socket={socket} />}
+        children={() => (
+          <VoIPStack
+            socket={socket}
+            userPhoneNumber={userPhoneNumber}
+          />
+        )}
         options={{ headerShown: false }}
       />
       <Tab.Screen
@@ -153,6 +169,9 @@ const App = () => {
   const [remotePeerId, setRemotePeerId] = useState(null);
   const [userPhoneNumber, setUserPhoneNumber] = useState(null);
 
+  // 전화를 받은 쪽에서 isCaller를 false로 전달
+  const [voipIncoming, setVoipIncoming] = useState(false);
+
   // 앱 최초 실행 시 권한 요청(마이크 등)
   useEffect(() => {
     checkPermissions();
@@ -162,13 +181,18 @@ const App = () => {
   const onLoginSuccess = (phoneNumber) => {
     setUserPhoneNumber(phoneNumber);
     setIsLoggedIn(true);
+
     const webSocket = io('http://192.168.0.223:3000'); // ※ 실제 서버 주소로 변경 필요
+
     webSocket.on('connect', () => {
       webSocket.emit('register-user', { phoneNumber });
     });
+
     webSocket.on('call', ({ from }) => {
       setRemotePeerId(from);
+      setVoipIncoming(true); // 수신측임을 플래그!
     });
+
     setSocket(webSocket);
   };
 
@@ -179,8 +203,15 @@ const App = () => {
       setSocket(null);
       setUserPhoneNumber(null);
       setRemotePeerId(null);
+      setVoipIncoming(false);
     }
   }, [isLoggedIn]);
+
+  // 통화 종료 후 리셋 핸들러
+  const handleHangup = () => {
+    setRemotePeerId(null);
+    setVoipIncoming(false);
+  };
 
   return (
     <ThemeProvider>
@@ -196,9 +227,15 @@ const App = () => {
           <AuthStack setIsLoggedIn={setIsLoggedIn} onLoginSuccess={onLoginSuccess} />
         )}
 
-        {/* remotePeerId가 생겼을 때만 VoIPCall 모달 표시 */}
+        {/* remotePeerId가 생겼을 때만 VoIPCall 모달 표시
+            수신측(isCaller=false)로 동작 */}
         {remotePeerId && socket && (
-          <VoIPCall remotePeerId={remotePeerId} socket={socket} onHangup={() => setRemotePeerId(null)} />
+          <VoIPCall 
+            remotePeerId={remotePeerId} 
+            socket={socket} 
+            onHangup={handleHangup}
+            isCaller={false} // 전화받는 쪽(수신자)에서는 isCaller를 false로
+          />
         )}
       </NavigationContainer>
     </ThemeProvider>

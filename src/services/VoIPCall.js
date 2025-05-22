@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, Button, StyleSheet, Alert, Platform, PermissionsAndroid } from 'react-native';
-import { mediaDevices, RTCPeerConnection, RTCSessionDescription } from 'react-native-webrtc';
+import { mediaDevices, RTCPeerConnection, RTCSessionDescription, MediaStream } from 'react-native-webrtc';
 
 const peerConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
-const VoIPCall = ({ remotePeerId, socket, onHangup }) => {
+const VoIPCall = ({ remotePeerId, socket, onHangup, isCaller }) => {
   const [localStream, setLocalStream] = useState(null);
   const [remoteStream, setRemoteStream] = useState(null);
   const pc = useRef(null);
@@ -13,6 +13,7 @@ const VoIPCall = ({ remotePeerId, socket, onHangup }) => {
   // remote stream 조립용
   const remoteMediaStream = useRef(new MediaStream());
 
+  // 1. 마이크 권한 및 오디오 스트림 얻기
   useEffect(() => {
     isMounted.current = true;
 
@@ -52,6 +53,7 @@ const VoIPCall = ({ remotePeerId, socket, onHangup }) => {
     };
   }, []);
 
+  // 2. peerConnection과 시그널링
   useEffect(() => {
     if (!remotePeerId || !socket || !localStream) return;
 
@@ -92,6 +94,7 @@ const VoIPCall = ({ remotePeerId, socket, onHangup }) => {
       }
     };
 
+    // --- 소켓 시그널 핸들러들 ---
     const handleOffer = async ({ offer, from }) => {
       try {
         if (closed || !isMounted.current || !pc.current) return;
@@ -132,7 +135,8 @@ const VoIPCall = ({ remotePeerId, socket, onHangup }) => {
     socket.on('answer', handleAnswer);
     socket.on('ice', handleIce);
 
-    if (socket.id !== remotePeerId) {
+    // --- 발신자(Caller)만 offer 생성 ---
+    if (isCaller) {
       (async () => {
         try {
           const offer = await pc.current.createOffer();
@@ -146,6 +150,7 @@ const VoIPCall = ({ remotePeerId, socket, onHangup }) => {
         }
       })();
     }
+    // 수신자는 절대 offer를 만들지 않는다!
 
     return () => {
       closed = true;
@@ -170,8 +175,9 @@ const VoIPCall = ({ remotePeerId, socket, onHangup }) => {
       setRemoteStream(null);
       console.log('peerConnection/시그널링 cleanup');
     };
-  }, [remotePeerId, socket, localStream]);
+  }, [remotePeerId, socket, localStream, isCaller]);
 
+  // 3. 통화 종료
   const hangup = () => {
     try {
       if (pc.current) pc.current.close();
@@ -186,7 +192,7 @@ const VoIPCall = ({ remotePeerId, socket, onHangup }) => {
 
   return (
     <View style={styles.callContainer}>
-      <Text style={{ color: '#fff', fontSize: 20 }}>VOIP 통화 연결됨</Text>
+      <Text style={{ color: '#fff', fontSize: 20 }}>VOIP 통화 연결됨 ({isCaller ? '발신자' : '수신자'})</Text>
       <Button title="통화 종료" onPress={hangup} color="#f44" />
       {remoteStream && <Text style={{color: '#fff'}}>상대의 오디오 스트림이 들어옴!</Text>}
     </View>
