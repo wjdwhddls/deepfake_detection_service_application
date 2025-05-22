@@ -7,6 +7,8 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
 import io from 'socket.io-client';
 
+import { checkPermissions } from './src/services/PhoneService'; // <--- 권한 체크 함수 추가 (필수)
+
 // screens
 import HomeScreen from './src/screens/HomeScreen';
 import DashBoardScreen from './src/screens/DashBoardScreen';
@@ -156,22 +158,26 @@ const App = () => {
   const [remotePeerId, setRemotePeerId] = useState(null);
   const [userPhoneNumber, setUserPhoneNumber] = useState(null);
 
-  // 로그인 성공 시 처리
+  // 앱 최초 실행 시 권한 요청(마이크 등)
+  useEffect(() => {
+    checkPermissions();
+  }, []);
+
+  // 로그인 성공 시 소켓 연결
   const onLoginSuccess = (phoneNumber) => {
     setUserPhoneNumber(phoneNumber);
     setIsLoggedIn(true);
-    const webSocket = io('http://10.0.2.2:3000'); // 서버 주소 확인 필요
+    const webSocket = io('http://192.168.0.223:3000'); // ※ 실제 서버 주소로 변경 필요
     webSocket.on('connect', () => {
       webSocket.emit('register-user', { phoneNumber });
     });
     webSocket.on('call', ({ from }) => {
       setRemotePeerId(from);
     });
-
     setSocket(webSocket);
   };
 
-  // 로그아웃 및 소켓 연결 해제
+  // 로그아웃/앱 종료시 소켓 정리
   useEffect(() => {
     if (!isLoggedIn && socket) {
       socket.disconnect();
@@ -195,7 +201,7 @@ const App = () => {
           <AuthStack setIsLoggedIn={setIsLoggedIn} onLoginSuccess={onLoginSuccess} />
         )}
 
-        {/* remotePeerId가 있을 때만 VoIPCall 컴포넌트 표시 */}
+        {/* remotePeerId가 생겼을 때만 VoIPCall 모달 표시 */}
         {remotePeerId && socket && (
           <VoIPCall remotePeerId={remotePeerId} socket={socket} onHangup={() => setRemotePeerId(null)} />
         )}
