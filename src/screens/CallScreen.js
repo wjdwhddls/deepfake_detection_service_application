@@ -3,18 +3,26 @@ import { View, Text, SafeAreaView, StyleSheet, TouchableOpacity, Image } from 'r
 import Icon from 'react-native-vector-icons/Ionicons';
 import Svg, { Path } from 'react-native-svg';
 
-// callState, peer, onAccept, onReject, onHangup 모두 props로 받습니다!
+/**
+ * CallScreen
+ * @param {string} callState         // 'outgoing', 'incoming', 'active'
+ * @param {object} peer              // { name, number, avatar }
+ * @param {function} onAccept
+ * @param {function} onReject
+ * @param {function} onHangup
+ * @param {boolean} isInvalidNumber  // 서버(소켓)에서 '없는 번호' 판정 시 true로 내려줌
+ * @param {boolean} isRejected       // 상대방이 거절했을 때 true로 내려줌
+ */
 export default function CallScreen({
-    callState = 'outgoing',        // 'outgoing', 'incoming', 'active'
+    callState = 'outgoing',
     peer = { name: 'Unknown', number: '', avatar: null },
     onAccept,
     onReject,
     onHangup,
+    isInvalidNumber = false,
+    isRejected = false,  // ← 추가: 상대가 거절했을 때 true
 }) {
-    // 없는 번호 예시 (실제 서비스에서는 서버 등으로 체크)
-    const invalidNumbers = ['', '12345', '000'];
-
-    // 타이머 설정(통화시간 표시)
+    // 타이머
     const [callTime, setCallTime] = useState(0);
     useEffect(() => {
         let timer = null;
@@ -31,8 +39,10 @@ export default function CallScreen({
 
     // 상태 메시지
     let stateText = '';
-    if (invalidNumbers.includes(peer.number)) {
+    if (isInvalidNumber) {
         stateText = '없는 번호입니다';
+    } else if (isRejected) {
+        stateText = '상대방이 전화를 거절했습니다';
     } else if (callState === 'outgoing') stateText = 'Calling...';
     else if (callState === 'incoming') stateText = 'Incoming call';
     else if (callState === 'active') stateText = formatTime(callTime);
@@ -86,53 +96,67 @@ export default function CallScreen({
                     </Text>
                     <Text style={styles.number}>{peer.number}</Text>
                 </View>
-
                 <Text style={styles.statusText}>{stateText}</Text>
             </View>
 
             {/* 버튼 */}
             <View style={styles.buttonRow}>
-                {!invalidNumbers.includes(peer.number) && callState === 'incoming' && (
-                    <>
-                        <TouchableOpacity
-                            style={[styles.circleButton, styles.acceptButton]}
-                            onPress={onAccept}
-                        >
-                            <Icon name="call" size={28} color="#fff" />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.circleButton, styles.rejectButton]}
-                            onPress={onReject}
-                        >
-                            <Icon name="close" size={32} color="#fff" />
-                        </TouchableOpacity>
-                    </>
-                )}
-                {!invalidNumbers.includes(peer.number) && callState === 'outgoing' && (
+                {/* "없는 번호" 또는 "거절"일 때는 닫기 버튼만 */}
+                {(isInvalidNumber || isRejected) ? (
                     <TouchableOpacity
                         style={[styles.circleButton, styles.rejectButton]}
                         onPress={onReject}
                     >
-                        <Icon
-                            name="call"
-                            size={28}
-                            color="#fff"
-                            style={{ transform: [{ rotate: '135deg' }] }}
-                        />
+                        <Icon name="close" size={32} color="#fff" />
                     </TouchableOpacity>
-                )}
-                {!invalidNumbers.includes(peer.number) && callState === 'active' && (
-                    <TouchableOpacity
-                        style={[styles.circleButton, styles.rejectButton]}
-                        onPress={onHangup}
-                    >
-                        <Icon
-                            name="call"
-                            size={28}
-                            color="#fff"
-                            style={{ transform: [{ rotate: '135deg' }] }}
-                        />
-                    </TouchableOpacity>
+                ) : (
+                    <>
+                        {/* 수신 상태: 수락/거절 */}
+                        {callState === 'incoming' && (
+                            <>
+                                <TouchableOpacity
+                                    style={[styles.circleButton, styles.acceptButton]}
+                                    onPress={onAccept}
+                                >
+                                    <Icon name="call" size={28} color="#fff" />
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.circleButton, styles.rejectButton]}
+                                    onPress={onReject}
+                                >
+                                    <Icon name="close" size={32} color="#fff" />
+                                </TouchableOpacity>
+                            </>
+                        )}
+                        {/* 발신: 종료(거절)만 */}
+                        {callState === 'outgoing' && (
+                            <TouchableOpacity
+                                style={[styles.circleButton, styles.rejectButton]}
+                                onPress={onReject}
+                            >
+                                <Icon
+                                    name="call"
+                                    size={28}
+                                    color="#fff"
+                                    style={{ transform: [{ rotate: '135deg' }] }}
+                                />
+                            </TouchableOpacity>
+                        )}
+                        {/* 통화중: 종료(끊기)만 */}
+                        {callState === 'active' && (
+                            <TouchableOpacity
+                                style={[styles.circleButton, styles.rejectButton]}
+                                onPress={onHangup}
+                            >
+                                <Icon
+                                    name="call"
+                                    size={28}
+                                    color="#fff"
+                                    style={{ transform: [{ rotate: '135deg' }] }}
+                                />
+                            </TouchableOpacity>
+                        )}
+                    </>
                 )}
             </View>
         </SafeAreaView>
@@ -142,91 +166,78 @@ export default function CallScreen({
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#16181d',
-        position: 'relative',
-        alignItems: 'center',
+        backgroundColor: '#f8fbfc',
         justifyContent: 'space-between',
+        alignItems: 'center',
     },
     pulseLayer: {
         ...StyleSheet.absoluteFillObject,
-        zIndex: 1,
     },
     centerArea: {
         flex: 1,
-        width: '100%',
         justifyContent: 'center',
         alignItems: 'center',
-        zIndex: 2,
     },
     profileContainer: {
-        justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 12,
+        marginBottom: 20,
     },
     avatar: {
-        width: 110,
-        height: 110,
-        borderRadius: 55,
-        borderWidth: 4,
-        borderColor: '#47a9fa',
-        backgroundColor: '#22293d',
-        marginBottom: 8,
+        width: 88,
+        height: 88,
+        borderRadius: 44,
+        backgroundColor: '#d3eaf7',
+        marginBottom: 10,
+        overflow: 'hidden',
     },
     avatarFallback: {
-        width: 110,
-        height: 110,
-        borderRadius: 55,
-        backgroundColor: '#22293d',
-        justifyContent: 'center',
+        width: 88,
+        height: 88,
+        borderRadius: 44,
+        backgroundColor: '#d3eaf7',
+        marginBottom: 10,
         alignItems: 'center',
-        borderWidth: 4,
-        borderColor: '#47a9fa',
-        marginBottom: 8,
+        justifyContent: 'center',
     },
     name: {
-        fontSize: 22,
-        fontWeight: '600',
-        color: '#eaf6ff',
-        marginTop: 8,
-        textAlign: 'center',
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#3394e5',
     },
     number: {
         fontSize: 16,
-        color: '#73b0f7',
-        marginBottom: 6,
-        textAlign: 'center',
+        color: '#6bb2e7',
+        marginTop: 4,
     },
     statusText: {
-        fontSize: 20,
-        color: '#71f4ff',
-        marginVertical: 20,
+        fontSize: 18,
+        color: '#7bbef6',
+        marginVertical: 30,
         textAlign: 'center',
     },
     buttonRow: {
         flexDirection: 'row',
-        alignItems: 'center',
         justifyContent: 'center',
-        paddingBottom: 36,
-        zIndex: 3,
-        gap: 30,
+        alignItems: 'center',
+        marginBottom: 44,
     },
     circleButton: {
-        width: 70,
-        height: 70,
-        borderRadius: 35,
+        width: 74,
+        height: 74,
+        borderRadius: 37,
         alignItems: 'center',
         justifyContent: 'center',
-        marginHorizontal: 18,
-        shadowColor: '#111',
-        shadowOffset: { width: 1, height: 3 },
-        shadowOpacity: 0.22,
-        shadowRadius: 7,
-        elevation: 5,
+        marginHorizontal: 22,
+        shadowColor: '#297afd',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.14,
+        shadowRadius: 6,
+        elevation: 4,
     },
     acceptButton: {
-        backgroundColor: '#29c98e',
+        backgroundColor: '#62d96f',
     },
     rejectButton: {
-        backgroundColor: '#ef4c54',
+        backgroundColor: '#ed489a',
     },
 });
