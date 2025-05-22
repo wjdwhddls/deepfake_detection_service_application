@@ -7,8 +7,6 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
 import io from 'socket.io-client';
 
-import { checkPermissions } from './src/services/PhoneService';
-
 // screens
 import HomeScreen from './src/screens/HomeScreen';
 import DashBoardScreen from './src/screens/DashBoardScreen';
@@ -25,12 +23,16 @@ import PasswordChangeScreen from './src/screens/PasswordChangeScreen';
 import LogoutScreen from './src/screens/LogoutScreen';
 import PostDetailScreen from './src/screens/PostDetailScreen';
 import ResultScreen from './src/screens/ResultScreen';
+
+import VoIPScreen from './src/screens/VoIPScreen';
+import CallScreen from './src/screens/CallScreen';
 import VoIPCall from './src/services/VoIPCall';
 
-// Tab/Stack 선언
+// 탭/스택 선언
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
+// Dashboard Stack
 const DashBoardStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="DashBoardMain" component={DashBoardScreen} />
@@ -38,6 +40,7 @@ const DashBoardStack = () => (
   </Stack.Navigator>
 );
 
+// Profile Stack
 const ProfileStack = ({ setIsLoggedIn }) => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="ProfileMain">
@@ -52,12 +55,28 @@ const ProfileStack = ({ setIsLoggedIn }) => (
   </Stack.Navigator>
 );
 
+// Detect Stack
 const DetectStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="DetectMain" component={HomeScreen} />
     <Stack.Screen name="DetectDetail" component={ResultScreen} />
   </Stack.Navigator>
 );
+
+// VoIP Stack
+const VoIPStack = ({ route }) => {
+  const socket = route?.params?.socket;
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen
+        name="VoIPScreen"
+        component={VoIPScreen}
+        initialParams={{ socket }}
+      />
+      <Stack.Screen name="CallScreen" component={CallScreen} />
+    </Stack.Navigator>
+  );
+};
 
 // MainTabNavigator
 const MainTabNavigator = ({ socket, setRemotePeerId, userPhoneNumber, setIsLoggedIn }) => {
@@ -66,12 +85,13 @@ const MainTabNavigator = ({ socket, setRemotePeerId, userPhoneNumber, setIsLogge
     <Tab.Navigator
       screenOptions={({ route }) => ({
         tabBarIcon: ({ focused, color, size }) => {
-          // 홈/대시보드/프로필 아이콘 케이스 정리
           let iconName;
           if (route.name === 'Home') {
-            iconName = focused ? 'shield-checkmark' : 'shield-checkmark-outline';
+            iconName = focused ? 'home' : 'home-outline';
+          } else if (route.name === 'VoIP') {
+            iconName = focused ? 'call' : 'call-outline';
           } else if (route.name === 'DashBoard') {
-            iconName = focused ? 'chatbubbles' : 'chatbubble-outline';
+            iconName = focused ? 'stats-chart' : 'stats-chart-outline';
           } else if (route.name === 'Profile') {
             iconName = focused ? 'person' : 'person-outline';
           }
@@ -92,6 +112,11 @@ const MainTabNavigator = ({ socket, setRemotePeerId, userPhoneNumber, setIsLogge
           />
         )}
         options={{ headerShown: false }}
+      />
+      <Tab.Screen
+        name="VoIP"
+        component={VoIPStack}
+        initialParams={{ socket }} // VoIPStack에 socket 전달
       />
       <Tab.Screen
         name="DashBoard"
@@ -131,61 +156,30 @@ const App = () => {
   const [remotePeerId, setRemotePeerId] = useState(null);
   const [userPhoneNumber, setUserPhoneNumber] = useState(null);
 
-  // 앱 시작 시 권한 체크
-  useEffect(() => {
-    checkPermissions();
-  }, []);
-
-  // 안전하게 기존 소켓 연결 해제
-  useEffect(() => {
-    if (!isLoggedIn && socket) {
-      try {
-        socket.disconnect();
-        setSocket(null);
-        setUserPhoneNumber(null);
-        setRemotePeerId(null);
-      } catch (e) {
-        console.log('[소켓 정리중 오류]', e);
-      }
-    }
-  }, [isLoggedIn]);
-
-  // 로그인 성공 시, 소켓 연결 및 이벤트 등록
+  // 로그인 성공 시 처리
   const onLoginSuccess = (phoneNumber) => {
     setUserPhoneNumber(phoneNumber);
     setIsLoggedIn(true);
-
-    if (socket) {
-      try {
-        socket.disconnect();
-      } catch (e) {}
-    }
-    // 주소는 맞게 교체(예시)
-    const webSocket = io('http://192.168.0.223:3000', {
-      transports: ['websocket'],
-      forceNew: true
-    });
-
+    const webSocket = io('http://10.0.2.2:3000'); // 서버 주소 확인 필요
     webSocket.on('connect', () => {
       webSocket.emit('register-user', { phoneNumber });
     });
     webSocket.on('call', ({ from }) => {
-      if (from !== phoneNumber) setRemotePeerId(from);
-    });
-    webSocket.on('disconnect', () => {
-      console.log('소켓 disconnected.');
-    });
-    webSocket.on('connect_error', (err) => {
-      Alert.alert('소켓 연결 오류', err?.message ?? '서버 연결 실패');
+      setRemotePeerId(from);
     });
 
     setSocket(webSocket);
   };
 
-  // VoIPCall hangup 핸들러
-  const handleHangup = () => {
-    setRemotePeerId(null);
-  };
+  // 로그아웃 및 소켓 연결 해제
+  useEffect(() => {
+    if (!isLoggedIn && socket) {
+      socket.disconnect();
+      setSocket(null);
+      setUserPhoneNumber(null);
+      setRemotePeerId(null);
+    }
+  }, [isLoggedIn]);
 
   return (
     <ThemeProvider>
@@ -200,13 +194,10 @@ const App = () => {
         ) : (
           <AuthStack setIsLoggedIn={setIsLoggedIn} onLoginSuccess={onLoginSuccess} />
         )}
-        {/* 통화가 있을때 우선 modal처럼 뜨는 구조 */}
-        {remotePeerId && socket && remotePeerId !== userPhoneNumber && (
-          <VoIPCall
-            remotePeerId={remotePeerId}
-            socket={socket}
-            onHangup={handleHangup}
-          />
+
+        {/* remotePeerId가 있을 때만 VoIPCall 컴포넌트 표시 */}
+        {remotePeerId && socket && (
+          <VoIPCall remotePeerId={remotePeerId} socket={socket} onHangup={() => setRemotePeerId(null)} />
         )}
       </NavigationContainer>
     </ThemeProvider>
