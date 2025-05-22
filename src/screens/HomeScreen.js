@@ -107,15 +107,6 @@ const HomeScreen = ({ socket, setRemotePeerId, userPhoneNumber }) => {
     navigation.navigate('DetectDetail', { result: resultData }); // ResultScreen으로 네비게이션, 결과 전달
   };
 
-  const handleCall = () => {
-    if (!phoneNumber) return Alert.alert('전화번호 입력!');
-    if (!socket) return Alert.alert('소켓 연결 필요!');
-    if (!userPhoneNumber) return Alert.alert('내 전화번호 정보 필요!');
-    socket.emit('call', { to: phoneNumber.trim(), from: userPhoneNumber });
-    // remotePeerId 직접 세팅 X!
-    Alert.alert('발신', `${phoneNumber} 번호로 VOIP 전화 요청`);
-  };
-
   const dynamicStyles = getDynamicStyles(isLightMode); // 동적 스타일 적용
 
   return (
@@ -132,22 +123,6 @@ const HomeScreen = ({ socket, setRemotePeerId, userPhoneNumber }) => {
             {loading ? '업로드 중...' : 'UPLOAD FILE'}
           </Text>
         </TouchableOpacity>
-      )}
-
-      {/* 전화번호 입력란과 CALL 버튼 */}
-      {showUploadButton && (
-        <>
-          <TextInput
-            style={dynamicStyles.phoneInput}
-            placeholder="전화번호 입력"
-            keyboardType="numeric"
-            value={phoneNumber}
-            onChangeText={setPhoneNumber}
-          />
-          <TouchableOpacity style={dynamicStyles.callButton} onPress={handleCall}>
-            <Text style={dynamicStyles.callButtonText}>CALL</Text>
-          </TouchableOpacity>
-        </>
       )}
 
       {/* 결과 화면 */}

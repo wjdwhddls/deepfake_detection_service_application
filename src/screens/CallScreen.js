@@ -1,12 +1,26 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, SafeAreaView, StyleSheet, TouchableOpacity, Image, Dimensions } from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, Text, SafeAreaView, StyleSheet, TouchableOpacity, Image, Alert } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import Svg, { Path } from 'react-native-svg';
-import { useRoute, useNavigation } from '@react-navigation/native';
+import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useTheme } from '../contexts/ThemeContext'; // 경로 주의!
+
+// 실제 socket/context에서 가져와야 함!
+const fakeSocket = {
+    emit: (event, data) => {
+        console.log(`SOCKET EMIT: ${event}`, data);
+    }
+};
 
 export default function CallScreen() {
     const route = useRoute();
     const navigation = useNavigation();
+
+    const { isLightMode } = useTheme ? useTheme() : { isLightMode: false };
+
+    // 예시로 state에 세팅 (실제 socket/userPhoneNumber는 props/context/redux 등에서 받아오세요)
+    const [socket] = useState(fakeSocket);
+    const [userPhoneNumber] = useState('01012345678');
 
     // 파라미터 추출
     const {
@@ -15,10 +29,21 @@ export default function CallScreen() {
     } = route.params || {};
 
     // 없는 번호 예시 목록 (실제 서비스에서는 서버 결과 값 등으로 체크)
-    const invalidNumbers = ['', '12345', '000']; // 여기 원하는 값 추가
+    const invalidNumbers = ['', '12345', '000'];
 
+    // 🟠 상태값: peer/통화상태 초기화 버전!
     const [callState, setCallState] = useState(initialCallState);
     const [callTime, setCallTime] = useState(0);
+    const [localPeer, setLocalPeer] = useState(peer);
+
+    // 화면 포커스(들어올 때마다) 모든 상태값 초기화
+    useFocusEffect(
+        useCallback(() => {
+            setCallState(initialCallState);
+            setCallTime(0);
+            setLocalPeer(peer);
+        }, [initialCallState, peer.number, peer.name, peer.avatar])
+    );
 
     // 타이머 관리
     useEffect(() => {
@@ -34,23 +59,36 @@ export default function CallScreen() {
     const formatTime = sec =>
         `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
 
-    // 상태 메시지
+    // 상태 메시지 (localPeer 참조)
     let stateText = '';
-    if (invalidNumbers.includes(peer.number)) {
+    if (invalidNumbers.includes(localPeer.number)) {
         stateText = '없는 번호입니다';
     } else if (callState === 'outgoing') stateText = 'Calling...';
     else if (callState === 'incoming') stateText = 'Incoming call';
     else if (callState === 'active') stateText = formatTime(callTime);
+    else if (callState === 'idle') stateText = '대기 중';
 
     // 버튼 핸들러
     const handleAccept = () => setCallState('active');
     const handleReject = () => navigation.navigate('VoIPScreen');
     const handleHangup = () => navigation.navigate('VoIPScreen');
 
+    // 발신(전화걸기) 핸들러: localPeer 사용!
+    const handleCall = () => {
+        if (!localPeer.number) return Alert.alert('상대 번호 정보 없음!');
+        if (!socket) return Alert.alert('소켓 연결 필요!');
+        if (!userPhoneNumber) return Alert.alert('내 전화번호 정보 필요!');
+        socket.emit('call', { to: localPeer.number.trim(), from: userPhoneNumber });
+        Alert.alert('발신', `${localPeer.number} 번호로 VOIP 전화 요청`);
+        setCallState('outgoing');
+    };
+
+    const dynamicStyles = getDynamicStyles(isLightMode); // 동적 스타일 적용
+
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={dynamicStyles.container}>
             {/* 배경 파동 */}
-            <View style={styles.pulseLayer} pointerEvents="none">
+            <View style={dynamicStyles.pulseLayer} pointerEvents="none">
                 <Svg
                     width={200}
                     height={80}
@@ -80,47 +118,58 @@ export default function CallScreen() {
                     />
                 </Svg>
             </View>
-
+    
             {/* 본문 */}
-            <View style={styles.centerArea}>
-                <View style={styles.profileContainer}>
-                    {peer.avatar ? (
-                        <Image source={peer.avatar} style={styles.avatar} />
+            <View style={dynamicStyles.centerArea}>
+                <View style={dynamicStyles.profileContainer}>
+                    {localPeer.avatar ? (
+                        <Image source={localPeer.avatar} style={dynamicStyles.avatar} />
                     ) : (
-                        <View style={styles.avatarFallback}>
+                        <View style={dynamicStyles.avatarFallback}>
                             <Icon name="person" size={58} color="#93d5f6" />
                         </View>
                     )}
-                    <Text style={styles.name}>
-                        {peer.name || peer.number || 'Unknown'}
+                    <Text style={dynamicStyles.name}>
+                        {localPeer.name || localPeer.number || 'Unknown'}
                     </Text>
-                    <Text style={styles.number}>{peer.number}</Text>
+                    <Text style={dynamicStyles.number}>{localPeer.number}</Text>
                 </View>
-
-                <Text style={styles.statusText}>{stateText}</Text>
+                <Text style={dynamicStyles.statusText}>{stateText}</Text>
             </View>
-
+    
             {/* 버튼 */}
-            <View style={styles.buttonRow}>
-                {!invalidNumbers.includes(peer.number) && callState === 'incoming' && (
+            <View style={dynamicStyles.buttonRow}>
+                {/* 발신 버튼: 통화 대기 상태에서만 노출 */}
+                {!invalidNumbers.includes(localPeer.number) && callState === 'idle' && (
+                    <TouchableOpacity
+                        style={[dynamicStyles.circleButton, dynamicStyles.acceptButton]}
+                        onPress={handleCall}
+                    >
+                        <Icon name="call" size={28} color="#fff" />
+                    </TouchableOpacity>
+                )}
+    
+                {/* 수신(받기/거절) */}
+                {!invalidNumbers.includes(localPeer.number) && callState === 'incoming' && (
                     <>
                         <TouchableOpacity
-                            style={[styles.circleButton, styles.acceptButton]}
+                            style={[dynamicStyles.circleButton, dynamicStyles.acceptButton]}
                             onPress={handleAccept}
                         >
                             <Icon name="call" size={28} color="#fff" />
                         </TouchableOpacity>
                         <TouchableOpacity
-                            style={[styles.circleButton, styles.rejectButton]}
+                            style={[dynamicStyles.circleButton, dynamicStyles.rejectButton]}
                             onPress={handleReject}
                         >
                             <Icon name="close" size={32} color="#fff" />
                         </TouchableOpacity>
                     </>
                 )}
-                {!invalidNumbers.includes(peer.number) && callState === 'outgoing' && (
+                {/* 발신: 통화 연결 전(거절) */}
+                {!invalidNumbers.includes(localPeer.number) && callState === 'outgoing' && (
                     <TouchableOpacity
-                        style={[styles.circleButton, styles.rejectButton]}
+                        style={[dynamicStyles.circleButton, dynamicStyles.rejectButton]}
                         onPress={handleReject}
                     >
                         <Icon
@@ -131,9 +180,10 @@ export default function CallScreen() {
                         />
                     </TouchableOpacity>
                 )}
-                {!invalidNumbers.includes(peer.number) && callState === 'active' && (
+                {/* 통화중: (끊기) */}
+                {!invalidNumbers.includes(localPeer.number) && callState === 'active' && (
                     <TouchableOpacity
-                        style={[styles.circleButton, styles.rejectButton]}
+                        style={[dynamicStyles.circleButton, dynamicStyles.rejectButton]}
                         onPress={handleHangup}
                     >
                         <Icon
@@ -147,10 +197,9 @@ export default function CallScreen() {
             </View>
         </SafeAreaView>
     );
-}
-
-
-const styles = StyleSheet.create({
+}    
+const getDynamicStyles = (isLightMode) =>
+    StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#16181d',
