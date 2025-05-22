@@ -43,7 +43,11 @@ export default function VoIPScreen({ isFocused, socket }) {
 
     const handleCall = () => {
         if (dialedNumber) {
-            // socket.emit('call', { to: dialedNumber });  // 필요 시 사용
+            if (socket && typeof socket.emit === 'function') {
+                // 실제 자신의 전화번호로 바꿔주세요!
+                const userPhoneNumber = '01012345678'; 
+                socket.emit('call', { to: dialedNumber.trim(), from: userPhoneNumber });
+            }
             navigation.navigate('CallScreen', {
                 peer: {
                     name: '',
@@ -55,6 +59,7 @@ export default function VoIPScreen({ isFocused, socket }) {
             console.warn("Please enter a valid number to call.");
         }
     };
+    
 
     return (
         <SafeAreaView style={styles.container}>
