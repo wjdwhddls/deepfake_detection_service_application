@@ -20,6 +20,25 @@ const keypadButtons = [
     { number: '#', label: '' },
 ];
 
+// 하이픈 포함 포맷
+function formatPhoneNumber(number) {
+    const onlyNumber = number.replace(/[^0-9]/g, '');
+
+    if (onlyNumber.length === 11 && onlyNumber.startsWith('01')) {
+        return onlyNumber.replace(/(\d{3})(\d{4})(\d{4})/, '\$1-\$2-\$3');
+    }
+    if (onlyNumber.length === 10 && onlyNumber.startsWith('02')) {
+        return onlyNumber.replace(/(\d{2})(\d{4})(\d{4})/, '\$1-\$2-\$3');
+    }
+    if (onlyNumber.length === 10) {
+        return onlyNumber.replace(/(\d{3})(\d{3,4})(\d{4})/, '\$1-\$2-\$3');
+    }
+    if (onlyNumber.length === 9) {
+        return onlyNumber.replace(/(\d{2,3})(\d{3})(\d{4})/, '\$1-\$2-\$3');
+    }
+    return onlyNumber;
+}
+
 export default function VoIPScreen({ isFocused, socket }) {
     const navigation = useNavigation();
     const [dialedNumber, setDialedNumber] = useState('');
@@ -32,7 +51,8 @@ export default function VoIPScreen({ isFocused, socket }) {
     }, [isFocused]);
 
     const handleKeyPress = (number) => {
-        if (dialedNumber.length < 11) {
+        const onlyNumber = dialedNumber.replace(/[^0-9]/g, '');
+        if (onlyNumber.length < 11) {
             setDialedNumber(prev => prev + number);
         }
     };
@@ -42,16 +62,22 @@ export default function VoIPScreen({ isFocused, socket }) {
     };
 
     const handleCall = () => {
-        if (dialedNumber) {
+        // 여기서 하이픈 포함값으로 동작
+        const formattedNumber = formatPhoneNumber(dialedNumber);
+        if (formattedNumber) {
+            // DB, 소켓, CallScreen 이동 모두 하이픈 포함 번호로!
             if (socket && typeof socket.emit === 'function') {
                 // 실제 자신의 전화번호로 바꿔주세요!
-                const userPhoneNumber = '01012345678'; 
-                socket.emit('call', { to: dialedNumber.trim(), from: userPhoneNumber });
+                const userPhoneNumber = '010-1234-5678'; 
+                socket.emit('call', { to: formattedNumber, from: userPhoneNumber });
             }
+            // DB 저장이 필요하면 여기도 formattedNumber로 활용!
+            // saveToDB({ phoneNumber: formattedNumber, ... });
+
             navigation.navigate('CallScreen', {
                 peer: {
                     name: '',
-                    number: dialedNumber,
+                    number: formattedNumber,
                 },
                 callState: 'outgoing',
             });
@@ -59,7 +85,6 @@ export default function VoIPScreen({ isFocused, socket }) {
             console.warn("Please enter a valid number to call.");
         }
     };
-    
 
     return (
         <SafeAreaView style={styles.container}>
@@ -69,7 +94,7 @@ export default function VoIPScreen({ isFocused, socket }) {
 
             <View style={styles.dialedNumberContainer}>
                 <Text style={styles.dialedNumber}>
-                    {dialedNumber}
+                    {formatPhoneNumber(dialedNumber)}
                 </Text>
             </View>
 
@@ -109,7 +134,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#FFFFFF',
         alignItems: 'center',
         justifyContent: 'flex-start',
-        paddingBottom: 70, // 하단탭바 공간 고려
+        paddingBottom: 70,
     },
     header: {
         width: '100%',
