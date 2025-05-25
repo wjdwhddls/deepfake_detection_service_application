@@ -151,33 +151,28 @@ const AuthStack = ({ setIsLoggedIn, onLoginSuccess }) => (
 const App = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [socket, setSocket] = useState(null);
-
-  // --- 통화 상태 ---
   const [remotePeerId, setRemotePeerId] = useState(null);
   const [userPhoneNumber, setUserPhoneNumber] = useState(null);
   const [callState, setCallState] = useState('idle');
   const [callModalVisible, setCallModalVisible] = useState(false);
   const [isCaller, setIsCaller] = useState(false);
-  const [callPeer, setCallPeer] = useState({ name: '', number: '', avatar: null });
-
-  // 스트림 받음 시 UI용
+  const [callPeer, setCallPeer] = useState({ name: '', number: '' }); // avatar 제거
   const [remoteStreamExists, setRemoteStreamExists] = useState(false);
 
   useEffect(() => { checkPermissions(); }, []);
 
-  // 로그인 후 소켓 연결 및 이벤트 바인딩
   const onLoginSuccess = (phoneNumber) => {
     setUserPhoneNumber(phoneNumber);
     setIsLoggedIn(true);
-
     const webSocket = io('http://192.168.0.108:3000');
+    
     webSocket.on('connect', () => {
       webSocket.emit('register-user', { phoneNumber });
     });
 
-    webSocket.on('call', ({ from, number, name, avatar }) => {
+    webSocket.on('call', ({ from, number, name }) => { // avatar 제거
       setRemotePeerId(from);
-      setCallPeer({ name, number, avatar });
+      setCallPeer({ name, number }); // avatar 제거
       setCallState('incoming');
       setCallModalVisible(true);
       setIsCaller(false);
@@ -186,7 +181,6 @@ const App = () => {
     setSocket(webSocket);
   };
 
-  // 로그아웃 cleanup
   useEffect(() => {
     if (!isLoggedIn && socket) {
       socket.disconnect();
@@ -196,43 +190,44 @@ const App = () => {
       setIsCaller(false);
       setCallState('idle');
       setCallModalVisible(false);
-      setCallPeer({ name: '', number: '', avatar: null });
+      setCallPeer({ name: '', number: '' }); // avatar 제거
       setRemoteStreamExists(false);
     }
   }, [isLoggedIn]);
 
-  // 발신
   const handleStartCall = (targetPeerId, peerInfo) => {
     setRemotePeerId(targetPeerId);
     setCallPeer(peerInfo);
     setCallState('outgoing');
     setCallModalVisible(true);
     setIsCaller(true);
+    
     if (socket && userPhoneNumber && targetPeerId) {
       socket.emit('call', {
         to: targetPeerId,
         from: socket.id,
         number: userPhoneNumber,
         name: userPhoneNumber,
-        avatar: null
+        avatar: null // avatar 제거
       });
     }
   };
 
-  // 수신 accept: 연결 시작
-  const handleAccept = () => setCallState('connecting');
+  const handleAccept = () => {
+    console.log('Call accepted. Changing state to connecting.');
+    setCallState('connecting');
+  };
 
-  // 거절/종료
   const handleRejectOrHangup = () => {
+    console.log('Rejecting or hanging up the call. Changing state to ended.');
     setCallState('ended');
-    setCallModalVisible(false);
-    setRemotePeerId(null);
-    setIsCaller(false);
-    setCallPeer({ name: '', number: '', avatar: null });
+    setCallModalVisible(false); 
+    setRemotePeerId(null);      
+    setIsCaller(false);         
+    setCallPeer({ name: '', number: '' }); // avatar 제거
     setRemoteStreamExists(false);
   };
 
-  // PeerConnection (webrtc signaling/stream 관리)
   useVoIPConnection({
     enabled: callModalVisible && ['connecting', 'active'].includes(callState),
     remotePeerId,
@@ -240,12 +235,12 @@ const App = () => {
     isCaller,
     onRemoteStream: (stream) => {
       setRemoteStreamExists(!!stream);
-      setCallState('active');
+      setCallState('active'); // Call is active now
     },
     onHangup: () => {
       setRemoteStreamExists(false);
       setCallModalVisible(false);
-      setCallState('ended');
+      setCallState('ended'); // Ensure state is ended on hangup
     }
   });
 
@@ -264,7 +259,6 @@ const App = () => {
           <AuthStack setIsLoggedIn={setIsLoggedIn} onLoginSuccess={onLoginSuccess} />
         )}
 
-        {/* ---- 통화 오버레이 ---- */}
         {callModalVisible && remotePeerId && socket && (
           <CallScreen
             callState={callState}

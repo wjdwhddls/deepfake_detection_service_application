@@ -1,12 +1,12 @@
 import React from 'react';
-import { View, Text, SafeAreaView, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { View, Text, SafeAreaView, StyleSheet, TouchableOpacity } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 
 // callState: 'outgoing', 'incoming', 'connecting', 'active', 'ended'
 // isConnecting, isActive, remoteStreamExists 등 prop으로 전달
 export default function CallScreen({
     callState = 'outgoing',
-    peer = { name: 'Unknown', number: '', avatar: null },
+    peer = { name: 'Unknown', number: '' },
     onAccept,
     onReject,
     onHangup,
@@ -61,22 +61,17 @@ export default function CallScreen({
             {/* Profile and wave background etc... */}
             <View style={styles.centerArea}>
                 <View style={styles.profileContainer}>
-                    {peer.avatar ? (
-                        <Image source={peer.avatar} style={styles.avatar} />
-                    ) : (
-                        <View style={styles.avatarFallback}>
-                            <Icon name="person" size={58} color="#93d5f6" />
-                        </View>
-                    )}
                     <Text style={styles.name}>
-                        {peer.name || peer.number || 'Unknown'}
+                        { peer.number }
                     </Text>
                     <Text style={styles.number}>{peer.number}</Text>
                 </View>
                 <Text style={styles.statusText}>{stateText}</Text>
-                {isActive && remoteStreamExists &&
-                    <Text style={{ color: '#62d96f', fontSize: 17 }}>상대의 오디오가 연결되었습니다</Text>
-                }
+                {isActive && remoteStreamExists && (
+                    <Text style={{ color: '#000000', fontSize: 17 }}>
+                        상대의 오디오가 연결되었습니다
+                    </Text>
+                )}
             </View>
             <View style={styles.buttonRow}>
                 {buttons}
@@ -100,23 +95,6 @@ const styles = StyleSheet.create({
     profileContainer: {
         alignItems: 'center',
         marginBottom: 20,
-    },
-    avatar: {
-        width: 88,
-        height: 88,
-        borderRadius: 44,
-        backgroundColor: '#d3eaf7',
-        marginBottom: 10,
-        overflow: 'hidden',
-    },
-    avatarFallback: {
-        width: 88,
-        height: 88,
-        borderRadius: 44,
-        backgroundColor: '#d3eaf7',
-        marginBottom: 10,
-        alignItems: 'center',
-        justifyContent: 'center',
     },
     name: {
         fontSize: 20,
