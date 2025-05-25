@@ -44,9 +44,6 @@ export default function VoIPScreen({ isFocused, socket, userPhoneNumber }) {
     const navigation = useNavigation();
     const [dialedNumber, setDialedNumber] = useState('');
 
-    // 기존 하드코딩 삭제!
-    // const userPhoneNumber = '010-1234-5678';
-
     // 포커스될 때 입력값 초기화(선택 사항)
     useEffect(() => {
         if (isFocused) {
