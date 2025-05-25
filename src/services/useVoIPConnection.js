@@ -1,123 +1,169 @@
 import { useRef, useEffect } from 'react';
-import { RTCPeerConnection, RTCSessionDescription, mediaDevices, MediaStream } from 'react-native-webrtc';
+import {
+  RTCPeerConnection,
+  RTCSessionDescription,
+  mediaDevices,
+  MediaStream,
+} from 'react-native-webrtc';
 
-const peerConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+const peerConfig = {
+  iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+};
 
 export default function useVoIPConnection({
-    enabled,
-    remotePeerId,
-    socket,
-    isCaller,
-    onRemoteStream,
-    onHangup,
+  enabled,
+  remotePeerId,
+  socket,
+  isCaller,
+  onRemoteStream,
+  onHangup,
 }) {
-    const pc = useRef(null);
-    const localStreamRef = useRef(null);
-    const remoteMediaStream = useRef(new MediaStream());
+  const pc = useRef(null);
+  const localStreamRef = useRef(null);
+  const remoteMediaStream = useRef(new MediaStream());
 
-    useEffect(() => {
-        if (!enabled || !remotePeerId || !socket) return;
+  useEffect(() => {
+    if (!enabled || !remotePeerId || !socket) {
+    if (!socket) {
+      //console.error('[VoIP] Socket is not connected.'); // 소켓의 연결 상태를 체크하고 로그를 남김
+    }
+    return; // 소켓이 없으면 실행을 종료
+  }
 
-        let isClosed = false;
-        let signalHandlers = {};
+    let isClosed = false;
+    let signalHandlers = {};
 
-        // MediaStream 가져오기
-        mediaDevices.getUserMedia({ audio: true })
-            .then(stream => {
-                localStreamRef.current = stream;
+    console.log('[VoIP] Initializing VoIP connection...');
 
-                // PeerConnection이 없는 경우에만 생성
-                if (!pc.current) {
-                    pc.current = new RTCPeerConnection(peerConfig);
-                }
+    mediaDevices
+      .getUserMedia({ audio: true })
+      .then((stream) => {
+        console.log('[VoIP] Local media stream acquired.');
+        localStreamRef.current = stream;
 
-                // 로컬 트랙을 PeerConnection에 추가
-                stream.getTracks().forEach(track => pc.current.addTrack(track, stream));
+        if (!pc.current) {
+          pc.current = new RTCPeerConnection(peerConfig);
+          console.log('[VoIP] Created new RTCPeerConnection');
+        }
 
-                // 원격 트랙 수신 처리
-                pc.current.ontrack = (event) => {
-                    if (isClosed) return;
-                    const newStream = event.streams[0] || remoteMediaStream.current;
-                    remoteMediaStream.current.addTrack(event.track); // 원격 오디오 스트림 추가
-                    if (onRemoteStream) onRemoteStream(newStream); // 원격 스트림 전달
-                };
+        stream.getTracks().forEach((track) => {
+          pc.current.addTrack(track, stream);
+          console.log('[VoIP] Added local track:', track.kind);
+        });
 
-                // ICE 후보 송신
-                pc.current.onicecandidate = (e) => {
-                    if (e.candidate) {
-                        socket.emit('ice', { candidate: e.candidate, to: remotePeerId, from: socket.id });
-                    }
-                };
-
-                // Offer 핸들러 등록
-                signalHandlers.handleOffer = async ({ offer, from }) => {
-                    if (isClosed || !pc.current) return;
-                    await pc.current.setRemoteDescription(new RTCSessionDescription(offer));
-                    const answer = await pc.current.createAnswer();
-                    await pc.current.setLocalDescription(answer);
-                    socket.emit('answer', { answer, to: from, from: socket.id });
-                };
-
-                // Answer 핸들러 등록
-                signalHandlers.handleAnswer = async ({ answer }) => {
-                    if (isClosed || !pc.current) return;
-                    await pc.current.setRemoteDescription(new RTCSessionDescription(answer));
-                    if (onRemoteStream) {
-                        onRemoteStream(remoteMediaStream.current); // 스트림 업데이트
-                    }
-                };
-
-                // ICE 후보 수신 처리
-                signalHandlers.handleIce = async ({ candidate }) => {
-                    if (candidate && pc.current) {
-                        try {
-                            await pc.current.addIceCandidate(candidate);
-                        } catch (e) {
-                            console.error('Error adding ICE candidate:', e);
-                        }
-                    }
-                };
-
-                // 소켓 이벤트 핸들러 등록
-                socket.on('offer', signalHandlers.handleOffer);
-                socket.on('answer', signalHandlers.handleAnswer);
-                socket.on('ice', signalHandlers.handleIce);
-
-                // Caller 경우 Offer 생성 및 전송
-                if (isCaller) {
-                    (async () => {
-                        const offer = await pc.current.createOffer();
-                        await pc.current.setLocalDescription(offer);
-                        socket.emit('offer', { offer, to: remotePeerId, from: socket.id });
-                    })();
-                }
-            })
-            .catch((err) => {
-                console.error('Failed to get media:', err);
-                if (onHangup) onHangup('mic_error', err?.message || err);
-            });
-
-        return () => {
-            isClosed = true;
-
-            // 소켓 이벤트 해제
-            socket.off('offer', signalHandlers.handleOffer);
-            socket.off('answer', signalHandlers.handleAnswer);
-            socket.off('ice', signalHandlers.handleIce);
-
-            // PeerConnection 종료 및 초기화
-            if (pc.current) {
-                pc.current.ontrack = null;
-                pc.current.onicecandidate = null;
-                try { pc.current.close(); } catch (e) {}
-                pc.current = null;
-            }
-
-            // 로컬 스트림 해제
-            if (localStreamRef.current && localStreamRef.current.release) {
-                try { localStreamRef.current.release(); } catch (e) {}
-                localStreamRef.current = null;
-            }
+        pc.current.oniceconnectionstatechange = () => {
+          console.log('[VoIP] ICE connection state:', pc.current.iceConnectionState);
         };
-    }, [enabled, remotePeerId, socket, isCaller, onRemoteStream, onHangup]);
+
+        pc.current.ontrack = (event) => {
+          if (isClosed) return;
+          console.log('[VoIP] Received remote track:', event.track.kind);
+
+          const newStream = event.streams[0] || remoteMediaStream.current;
+          remoteMediaStream.current.addTrack(event.track);
+
+          if (onRemoteStream) {
+            console.log('[VoIP] Calling onRemoteStream with remote stream');
+            onRemoteStream(newStream);
+          }
+        };
+
+        pc.current.onicecandidate = (e) => {
+          if (e.candidate) {
+            console.log('[VoIP] Sending ICE candidate');
+            socket.emit('ice', {
+              candidate: e.candidate,
+              to: remotePeerId,
+              from: socket.id,
+            });
+          } else {
+            console.log('[VoIP] ICE candidate gathering complete');
+          }
+        };
+
+        signalHandlers.handleOffer = async ({ offer, from }) => {
+          if (isClosed || !pc.current) return;
+          console.log('[VoIP] Received offer from', from);
+          await pc.current.setRemoteDescription(new RTCSessionDescription(offer));
+          const answer = await pc.current.createAnswer();
+          await pc.current.setLocalDescription(answer);
+          socket.emit('answer', { answer, to: from, from: socket.id });
+          console.log('[VoIP] Sent answer to', from);
+        };
+
+        signalHandlers.handleAnswer = async ({ answer }) => {
+          if (isClosed || !pc.current) return;
+          console.log('[VoIP] Received answer');
+          await pc.current.setRemoteDescription(new RTCSessionDescription(answer));
+          if (onRemoteStream) {
+            onRemoteStream(remoteMediaStream.current);
+          }
+        };
+
+        signalHandlers.handleIce = async ({ candidate }) => {
+          if (candidate && pc.current) {
+            try {
+              await pc.current.addIceCandidate(candidate);
+              console.log('[VoIP] Added remote ICE candidate');
+            } catch (e) {
+              console.error('[VoIP] Error adding ICE candidate:', e);
+            }
+          }
+        };
+
+        socket.on('offer', signalHandlers.handleOffer);
+        socket.on('answer', signalHandlers.handleAnswer);
+        socket.on('ice', signalHandlers.handleIce);
+
+        if (isCaller) {
+          (async () => {
+            try {
+                console.log('[VoIP] Preparing to create offer...'); // Offer 생성을 준비했을 때 로그  
+                const offer = await pc.current.createOffer();
+                await pc.current.setLocalDescription(offer);
+                console.log('[VoIP] Created offer:', offer); // Offer 정보 확인
+                socket.emit('offer', {
+                    offer,
+                    to: remotePeerId,
+                    from: socket.id,
+                });
+                console.log('[VoIP] Sent offer to', remotePeerId);
+            } catch (err) {
+                console.error('[VoIP] Failed to create/send offer:', err);
+            }
+          })();
+        }
+      })
+      .catch((err) => {
+        console.error('[VoIP] Failed to get media:', err);
+        if (onHangup) onHangup('mic_error', err?.message || err);
+      });
+
+    return () => {
+      isClosed = true;
+      console.log('[VoIP] Cleaning up connection...');
+
+      socket.off('offer', signalHandlers.handleOffer);
+      socket.off('answer', signalHandlers.handleAnswer);
+      socket.off('ice', signalHandlers.handleIce);
+
+      if (pc.current) {
+        pc.current.ontrack = null;
+        pc.current.onicecandidate = null;
+        try {
+          pc.current.close();
+        } catch (e) {}
+        pc.current = null;
+        console.log('[VoIP] Closed RTCPeerConnection');
+      }
+
+      if (localStreamRef.current && localStreamRef.current.release) {
+        try {
+          localStreamRef.current.release();
+          console.log('[VoIP] Released local stream');
+        } catch (e) {}
+        localStreamRef.current = null;
+      }
+    };
+  }, [enabled, remotePeerId, socket, isCaller, onRemoteStream, onHangup]);
 }

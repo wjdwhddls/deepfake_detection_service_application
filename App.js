@@ -167,6 +167,7 @@ const App = () => {
     const webSocket = io('http://192.168.0.108:3000');
     
     webSocket.on('connect', () => {
+      console.log('[WebSocket] Connected to the server');
       webSocket.emit('register-user', { phoneNumber });
     });
 
@@ -196,6 +197,7 @@ const App = () => {
   }, [isLoggedIn]);
 
   const handleStartCall = (targetPeerId, peerInfo) => {
+    console.log('Starting call to:', targetPeerId);
     setRemotePeerId(targetPeerId);
     setCallPeer(peerInfo);
     setCallState('outgoing');
@@ -208,7 +210,6 @@ const App = () => {
         from: socket.id,
         number: userPhoneNumber,
         name: userPhoneNumber,
-        avatar: null // avatar 제거
       });
     }
   };

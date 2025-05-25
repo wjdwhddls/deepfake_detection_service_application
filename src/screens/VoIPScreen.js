@@ -40,7 +40,7 @@ function formatPhoneNumber(number) {
 }
 
 // 여기 추가! userPhoneNumber prop으로 받음
-export default function VoIPScreen({ isFocused, socket, userPhoneNumber }) {
+export default function VoIPScreen({ isFocused, socket, userPhoneNumber, onStartCall }) {
     const navigation = useNavigation();
     const [dialedNumber, setDialedNumber] = useState('');
 
@@ -129,7 +129,10 @@ export default function VoIPScreen({ isFocused, socket, userPhoneNumber }) {
             </View>
 
             <View style={styles.buttonContainer}>
-                <TouchableOpacity style={styles.callButton} onPress={handleCall}>
+                <TouchableOpacity 
+                    style={styles.callButton} 
+                    onPress={() => onStartCall(formatPhoneNumber(dialedNumber), { name: '' })}
+                >
                     <Icon name="call" size={28} color="#FFFFFF" />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.backspaceButton} onPress={handleBackspace}>
