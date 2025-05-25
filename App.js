@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { Alert } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Icon from 'react-native-vector-icons/Ionicons';
@@ -9,7 +8,6 @@ import io from 'socket.io-client';
 
 import { checkPermissions } from './src/services/PhoneService';
 
-// screens
 import HomeScreen from './src/screens/HomeScreen';
 import DashBoardScreen from './src/screens/DashBoardScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
@@ -28,13 +26,11 @@ import ResultScreen from './src/screens/ResultScreen';
 
 import VoIPScreen from './src/screens/VoIPScreen';
 import CallScreen from './src/screens/CallScreen';
-import VoIPCall from './src/services/VoIPCall';
+import useVoIPConnection from './src/services/useVoIPConnection';
 
-// Stack 선언
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
-// Dashboard Stack
 const DashBoardStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="DashBoardMain" component={DashBoardScreen} />
@@ -42,7 +38,6 @@ const DashBoardStack = () => (
   </Stack.Navigator>
 );
 
-// Profile Stack
 const ProfileStack = ({ setIsLoggedIn }) => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="ProfileMain">
@@ -57,7 +52,6 @@ const ProfileStack = ({ setIsLoggedIn }) => (
   </Stack.Navigator>
 );
 
-// Detect Stack
 const DetectStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="DetectMain" component={HomeScreen} />
@@ -65,7 +59,6 @@ const DetectStack = () => (
   </Stack.Navigator>
 );
 
-// VoIP Stack - socket과 userPhoneNumber를 props로 직접 전달!
 const VoIPStack = ({ socket, userPhoneNumber, onStartCall }) => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="VoIPScreen">
@@ -73,7 +66,7 @@ const VoIPStack = ({ socket, userPhoneNumber, onStartCall }) => (
         <VoIPScreen
           {...props}
           socket={socket}
-          userPhoneNumber={userPhoneNumber} // userPhoneNumber prop 전달
+          userPhoneNumber={userPhoneNumber}
           onStartCall={onStartCall}
         />
       )}
@@ -82,7 +75,6 @@ const VoIPStack = ({ socket, userPhoneNumber, onStartCall }) => (
   </Stack.Navigator>
 );
 
-// MainTabNavigator에서 VoIP 기능을 위한 콜백 패턴 적용
 const MainTabNavigator = ({
   socket,
   setRemotePeerId,
@@ -96,15 +88,10 @@ const MainTabNavigator = ({
       screenOptions={({ route }) => ({
         tabBarIcon: ({ focused, color, size }) => {
           let iconName;
-          if (route.name === 'Home') {
-            iconName = focused ? 'home' : 'home-outline';
-          } else if (route.name === 'VoIP') {
-            iconName = focused ? 'call' : 'call-outline';
-          } else if (route.name === 'DashBoard') {
-            iconName = focused ? 'stats-chart' : 'stats-chart-outline';
-          } else if (route.name === 'Profile') {
-            iconName = focused ? 'person' : 'person-outline';
-          }
+          if (route.name === 'Home')      iconName = focused ? 'home' : 'home-outline';
+          else if (route.name === 'VoIP') iconName = focused ? 'call' : 'call-outline';
+          else if (route.name === 'DashBoard') iconName = focused ? 'stats-chart' : 'stats-chart-outline';
+          else if (route.name === 'Profile')   iconName = focused ? 'person' : 'person-outline';
           return <Icon name={iconName} size={size} color={color} />;
         },
         tabBarActiveTintColor: isLightMode ? '#007AFF' : '#FFCC00',
@@ -121,7 +108,6 @@ const MainTabNavigator = ({
             userPhoneNumber={userPhoneNumber}
           />
         )}
-        options={{ headerShown: false }}
       />
       <Tab.Screen
         name="VoIP"
@@ -132,23 +118,19 @@ const MainTabNavigator = ({
             onStartCall={onStartCall}
           />
         )}
-        options={{ headerShown: false }}
       />
       <Tab.Screen
         name="DashBoard"
         component={DashBoardStack}
-        options={{ headerShown: false }}
       />
       <Tab.Screen
         name="Profile"
         children={() => <ProfileStack setIsLoggedIn={setIsLoggedIn} />}
-        options={{ headerShown: false }}
       />
     </Tab.Navigator>
   );
 };
 
-// Auth Stack
 const AuthStack = ({ setIsLoggedIn, onLoginSuccess }) => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="Login">
@@ -170,31 +152,29 @@ const App = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [socket, setSocket] = useState(null);
 
-  // 통화 관련 상태
+  // --- 통화 상태 ---
   const [remotePeerId, setRemotePeerId] = useState(null);
   const [userPhoneNumber, setUserPhoneNumber] = useState(null);
-
-  // 통화 상태: 'idle' | 'outgoing' | 'incoming' | 'connecting' | 'active' | 'ended'
   const [callState, setCallState] = useState('idle');
   const [callModalVisible, setCallModalVisible] = useState(false);
   const [isCaller, setIsCaller] = useState(false);
   const [callPeer, setCallPeer] = useState({ name: '', number: '', avatar: null });
 
-  useEffect(() => {
-    checkPermissions();
-  }, []);
+  // 스트림 받음 시 UI용
+  const [remoteStreamExists, setRemoteStreamExists] = useState(false);
 
-  // 로그인 성공 시 소켓 연결
+  useEffect(() => { checkPermissions(); }, []);
+
+  // 로그인 후 소켓 연결 및 이벤트 바인딩
   const onLoginSuccess = (phoneNumber) => {
     setUserPhoneNumber(phoneNumber);
     setIsLoggedIn(true);
 
-    const webSocket = io('http://192.168.0.223:3000'); // 실제 주소로 대체!
+    const webSocket = io('http://192.168.0.108:3000');
     webSocket.on('connect', () => {
       webSocket.emit('register-user', { phoneNumber });
     });
 
-    // 수신 이벤트 - 상대가 call할 경우
     webSocket.on('call', ({ from, number, name, avatar }) => {
       setRemotePeerId(from);
       setCallPeer({ name, number, avatar });
@@ -206,7 +186,7 @@ const App = () => {
     setSocket(webSocket);
   };
 
-  // 로그아웃/앱 종료시 소켓 정리
+  // 로그아웃 cleanup
   useEffect(() => {
     if (!isLoggedIn && socket) {
       socket.disconnect();
@@ -217,10 +197,11 @@ const App = () => {
       setCallState('idle');
       setCallModalVisible(false);
       setCallPeer({ name: '', number: '', avatar: null });
+      setRemoteStreamExists(false);
     }
   }, [isLoggedIn]);
 
-  // 발신 통화 시작
+  // 발신
   const handleStartCall = (targetPeerId, peerInfo) => {
     setRemotePeerId(targetPeerId);
     setCallPeer(peerInfo);
@@ -238,31 +219,35 @@ const App = () => {
     }
   };
 
-  // CallScreen에서 수락
-  const handleAccept = () => {
-    setCallState('connecting');
-  };
+  // 수신 accept: 연결 시작
+  const handleAccept = () => setCallState('connecting');
 
-  // CallScreen에서 거절 or 종료
+  // 거절/종료
   const handleRejectOrHangup = () => {
     setCallState('ended');
     setCallModalVisible(false);
     setRemotePeerId(null);
     setIsCaller(false);
+    setCallPeer({ name: '', number: '', avatar: null });
+    setRemoteStreamExists(false);
   };
 
-  // VoIPCall에서 remoteStream(연결) 성공
-  const handleRemoteStream = (stream) => {
-    setCallState('active');
-  };
-
-  // VoIPCall에서 hangup(종료) 시
-  const handleHangup = () => {
-    setCallState('ended');
-    setCallModalVisible(false);
-    setRemotePeerId(null);
-    setIsCaller(false);
-  };
+  // PeerConnection (webrtc signaling/stream 관리)
+  useVoIPConnection({
+    enabled: callModalVisible && ['connecting', 'active'].includes(callState),
+    remotePeerId,
+    socket,
+    isCaller,
+    onRemoteStream: (stream) => {
+      setRemoteStreamExists(!!stream);
+      setCallState('active');
+    },
+    onHangup: () => {
+      setRemoteStreamExists(false);
+      setCallModalVisible(false);
+      setCallState('ended');
+    }
+  });
 
   return (
     <ThemeProvider>
@@ -278,23 +263,17 @@ const App = () => {
         ) : (
           <AuthStack setIsLoggedIn={setIsLoggedIn} onLoginSuccess={onLoginSuccess} />
         )}
+
+        {/* ---- 통화 오버레이 ---- */}
         {callModalVisible && remotePeerId && socket && (
-          <>
-            <CallScreen
-              callState={callState}
-              peer={callPeer}
-              onAccept={handleAccept}
-              onReject={handleRejectOrHangup}
-              onHangup={handleRejectOrHangup}
-            />
-            <VoIPCall
-              remotePeerId={remotePeerId}
-              socket={socket}
-              isCaller={isCaller}
-              onHangup={handleHangup}
-              onRemoteStream={handleRemoteStream}
-            />
-          </>
+          <CallScreen
+            callState={callState}
+            peer={callPeer}
+            onAccept={handleAccept}
+            onReject={handleRejectOrHangup}
+            onHangup={handleRejectOrHangup}
+            remoteStreamExists={remoteStreamExists}
+          />
         )}
       </NavigationContainer>
     </ThemeProvider>
