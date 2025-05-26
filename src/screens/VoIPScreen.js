@@ -4,6 +4,8 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
+const SCREEN_HEIGHT = Dimensions.get('window').height;
+const BUTTON_SIZE = SCREEN_WIDTH / 5; // 3x4 배열을 만들기 위해 여유있는 너비로 설정
 
 const keypadButtons = [
     { number: '1', label: '' },
@@ -20,10 +22,8 @@ const keypadButtons = [
     { number: '#', label: '' },
 ];
 
-// 하이픈 포함 포맷
 function formatPhoneNumber(number) {
     const onlyNumber = number.replace(/[^0-9]/g, '');
-
     if (onlyNumber.length === 11 && onlyNumber.startsWith('01')) {
         return onlyNumber.replace(/(\d{3})(\d{4})(\d{4})/, '$1-$2-$3');
     }
@@ -39,26 +39,23 @@ function formatPhoneNumber(number) {
     return onlyNumber;
 }
 
-// 여기 추가! userPhoneNumber prop으로 받음
 export default function VoIPScreen({ isFocused, socket, userPhoneNumber, onStartCall }) {
     const navigation = useNavigation();
     const [dialedNumber, setDialedNumber] = useState('');
 
-    // 포커스될 때 입력값 초기화(선택 사항)
     useEffect(() => {
         if (isFocused) {
             setDialedNumber('');
         }
     }, [isFocused]);
 
-    // 전화 수신시 CallScreen으로 이동
     useEffect(() => {
         if (!socket) return;
 
         const onCall = ({ from }) => {
             navigation.navigate('CallScreen', {
                 peer: {
-                    name: '', // 필요시 상대 이름 조회 등 추가 가능
+                    name: '',
                     number: from,
                 },
                 callState: 'incoming',
@@ -67,7 +64,6 @@ export default function VoIPScreen({ isFocused, socket, userPhoneNumber, onStart
 
         socket.on('call', onCall);
 
-        // clean up
         return () => {
             socket.off('call', onCall);
         };
@@ -84,24 +80,6 @@ export default function VoIPScreen({ isFocused, socket, userPhoneNumber, onStart
         setDialedNumber(prev => prev.slice(0, -1));
     };
 
-    const handleCall = () => {
-        const formattedNumber = formatPhoneNumber(dialedNumber);
-        if (formattedNumber) {
-            if (socket && typeof socket.emit === 'function') {
-                socket.emit('call', { to: formattedNumber, from: userPhoneNumber });
-            }
-            navigation.navigate('CallScreen', {
-                peer: {
-                    name: '',
-                    number: formattedNumber,
-                },
-                callState: 'outgoing',
-            });
-        } else {
-            console.warn("Please enter a valid number to call.");
-        }
-    };
-
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
@@ -109,22 +87,21 @@ export default function VoIPScreen({ isFocused, socket, userPhoneNumber, onStart
             </View>
 
             <View style={styles.dialedNumberContainer}>
-                <Text style={styles.dialedNumber}>
-                    {formatPhoneNumber(dialedNumber)}
-                </Text>
+                <Text style={styles.dialedNumber}>{formatPhoneNumber(dialedNumber)}</Text>
             </View>
 
             <View style={styles.keypadContainer}>
                 {keypadButtons.map(({ number, label }, idx) => (
-                    <TouchableOpacity
-                        key={idx}
-                        style={styles.keypadButton}
-                        onPress={() => handleKeyPress(number)}
-                        activeOpacity={0.7}
-                    >
-                        <Text style={styles.keypadButtonText}>{number}</Text>
-                        {!!label && <Text style={styles.keypadLabel}>{label}</Text>}
-                    </TouchableOpacity>
+                    <View key={idx} style={styles.keypadWrapper}>
+                        <TouchableOpacity
+                            style={styles.keypadButton}
+                            onPress={() => handleKeyPress(number)}
+                            activeOpacity={0.7}
+                        >
+                            <Text style={styles.keypadButtonText}>{number}</Text>
+                            {!!label && <Text style={styles.keypadLabel}>{label}</Text>}
+                        </TouchableOpacity>
+                    </View>
                 ))}
             </View>
 
@@ -133,16 +110,14 @@ export default function VoIPScreen({ isFocused, socket, userPhoneNumber, onStart
                     style={styles.callButton} 
                     onPress={() => onStartCall(formatPhoneNumber(dialedNumber), { name: '' })}
                 >
-                    <Icon name="call" size={28} color="#FFFFFF" />
+                    <Icon name="call" size={SCREEN_HEIGHT * 0.035} color="#FFFFFF" />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.backspaceButton} onPress={handleBackspace}>
                     <View style={styles.backspaceIconContainer}>
-                        <Icon name="backspace" size={20} color="#B0BEC5" />
+                        <Icon name="backspace" size={SCREEN_HEIGHT * 0.03} color="#B0BEC5" />
                     </View>
                 </TouchableOpacity>
             </View>
-
-            <View style={styles.tabBarSpace} />
         </SafeAreaView>
     );
 }
@@ -153,26 +128,22 @@ const styles = StyleSheet.create({
         backgroundColor: '#FFFFFF',
         alignItems: 'center',
         justifyContent: 'flex-start',
-        paddingBottom: 70,
     },
     header: {
-        width: '100%',
-        paddingHorizontal: 20,
-        paddingTop: 20,
+        marginTop: SCREEN_HEIGHT * 0.03,
         alignItems: 'center',
     },
     title: {
-        fontSize: 32,
+        fontSize: SCREEN_HEIGHT * 0.035,
         fontWeight: 'bold',
         color: '#1976D2',
-        textAlign: 'center',
     },
     dialedNumberContainer: {
-        marginTop: 20,
+        marginTop: SCREEN_HEIGHT * 0.02,
         alignItems: 'center',
     },
     dialedNumber: {
-        fontSize: 25,
+        fontSize: SCREEN_HEIGHT * 0.03,
         color: '#000000',
         paddingBottom: 10,
         borderBottomWidth: 2,
@@ -181,43 +152,47 @@ const styles = StyleSheet.create({
         textAlign: 'center',
     },
     keypadContainer: {
-        marginTop: 30,
-        width: '60%',
+        marginTop: SCREEN_HEIGHT * 0.03,
+        width: '100%',
         flexDirection: 'row',
         flexWrap: 'wrap',
-        justifyContent: 'space-between',
+        justifyContent: 'center',
+    },
+    keypadWrapper: {
+        width: '33.33%',
+        alignItems: 'center',
+        marginVertical: 8,
     },
     keypadButton: {
-        width: '25%',
-        height: SCREEN_WIDTH * 0.15,
+        width: BUTTON_SIZE,
+        height: BUTTON_SIZE,
+        borderRadius: BUTTON_SIZE / 2,
+        backgroundColor: '#E0E0E0',
         justifyContent: 'center',
         alignItems: 'center',
-        borderRadius: 60,
-        backgroundColor: '#E0E0E0',
-        margin: 5,
         elevation: 2,
     },
     keypadButtonText: {
-        fontSize: 28,
+        fontSize: SCREEN_HEIGHT * 0.035,
         color: '#000000',
     },
     keypadLabel: {
-        fontSize: 12,
+        fontSize: SCREEN_HEIGHT * 0.015,
         color: '#000000',
     },
     buttonContainer: {
         flexDirection: 'row',
         justifyContent: 'center',
         width: '80%',
-        marginVertical: 20,
+        marginTop: SCREEN_HEIGHT * 0.03,
         alignItems: 'center',
     },
     backspaceButton: {
-        width: 50,
-        height: 50,
+        width: SCREEN_HEIGHT * 0.06,
+        height: SCREEN_HEIGHT * 0.06,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: 'transparent',
+        marginLeft: 20,
     },
     backspaceIconContainer: {
         borderColor: 'white',
@@ -226,16 +201,12 @@ const styles = StyleSheet.create({
         padding: 10,
     },
     callButton: {
-        width: 50,
-        height: 50,
+        width: SCREEN_HEIGHT * 0.06,
+        height: SCREEN_HEIGHT * 0.06,
         backgroundColor: '#34B7F1',
-        borderRadius: 60,
+        borderRadius: SCREEN_HEIGHT * 0.03,
         alignItems: 'center',
         justifyContent: 'center',
         elevation: 2,
-        marginRight: 20,
-    },
-    tabBarSpace: {
-        height: 70,
     },
 });
