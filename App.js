@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Modal } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Icon from 'react-native-vector-icons/Ionicons';
@@ -7,7 +8,6 @@ import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
 import io from 'socket.io-client';
 
 import { checkPermissions } from './src/services/PhoneService';
-
 import HomeScreen from './src/screens/HomeScreen';
 import DashBoardScreen from './src/screens/DashBoardScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
@@ -23,41 +23,12 @@ import PasswordChangeScreen from './src/screens/PasswordChangeScreen';
 import LogoutScreen from './src/screens/LogoutScreen';
 import PostDetailScreen from './src/screens/PostDetailScreen';
 import ResultScreen from './src/screens/ResultScreen';
-
 import VoIPScreen from './src/screens/VoIPScreen';
 import CallScreen from './src/screens/CallScreen';
 import useVoIPConnection from './src/services/useVoIPConnection';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
-
-const DashBoardStack = () => (
-  <Stack.Navigator screenOptions={{ headerShown: false }}>
-    <Stack.Screen name="DashBoardMain" component={DashBoardScreen} />
-    <Stack.Screen name="PostDetail" component={PostDetailScreen} />
-  </Stack.Navigator>
-);
-
-const ProfileStack = ({ setIsLoggedIn }) => (
-  <Stack.Navigator screenOptions={{ headerShown: false }}>
-    <Stack.Screen name="ProfileMain">
-      {(props) => <ProfileScreen {...props} setIsLoggedIn={setIsLoggedIn} />}
-    </Stack.Screen>
-    <Stack.Screen name="NotificationSettings" component={NotificationSettingsScreen} />
-    <Stack.Screen name="ProfileEdit" component={ProfileEditScreen} />
-    <Stack.Screen name="Info" component={InfoScreen} />
-    <Stack.Screen name="FAQ" component={FAQScreen} />
-    <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
-    <Stack.Screen name="Logout" component={LogoutScreen} />
-  </Stack.Navigator>
-);
-
-const DetectStack = () => (
-  <Stack.Navigator screenOptions={{ headerShown: false }}>
-    <Stack.Screen name="DetectMain" component={HomeScreen} />
-    <Stack.Screen name="DetectDetail" component={ResultScreen} />
-  </Stack.Navigator>
-);
 
 const VoIPStack = ({ socket, userPhoneNumber, onStartCall }) => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -71,27 +42,20 @@ const VoIPStack = ({ socket, userPhoneNumber, onStartCall }) => (
         />
       )}
     </Stack.Screen>
-    <Stack.Screen name="CallScreen" component={CallScreen} />
   </Stack.Navigator>
 );
 
-const MainTabNavigator = ({
-  socket,
-  setRemotePeerId,
-  userPhoneNumber,
-  setIsLoggedIn,
-  onStartCall
-}) => {
+const MainTabNavigator = ({ socket, setRemotePeerId, userPhoneNumber, setIsLoggedIn, onStartCall }) => {
   const { isLightMode } = useTheme();
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         tabBarIcon: ({ focused, color, size }) => {
           let iconName;
-          if (route.name === 'Home')      iconName = focused ? 'home' : 'home-outline';
+          if (route.name === 'Home') iconName = focused ? 'home' : 'home-outline';
           else if (route.name === 'VoIP') iconName = focused ? 'call' : 'call-outline';
           else if (route.name === 'DashBoard') iconName = focused ? 'stats-chart' : 'stats-chart-outline';
-          else if (route.name === 'Profile')   iconName = focused ? 'person' : 'person-outline';
+          else if (route.name === 'Profile') iconName = focused ? 'person' : 'person-outline';
           return <Icon name={iconName} size={size} color={color} />;
         },
         tabBarActiveTintColor: isLightMode ? '#007AFF' : '#FFCC00',
@@ -99,54 +63,15 @@ const MainTabNavigator = ({
         headerShown: false,
       })}
     >
-      <Tab.Screen
-        name="Home"
-        children={() => (
-          <HomeScreen
-            socket={socket}
-            setRemotePeerId={setRemotePeerId}
-            userPhoneNumber={userPhoneNumber}
-          />
-        )}
-      />
-      <Tab.Screen
-        name="VoIP"
-        children={() => (
-          <VoIPStack
-            socket={socket}
-            userPhoneNumber={userPhoneNumber}
-            onStartCall={onStartCall}
-          />
-        )}
-      />
-      <Tab.Screen
-        name="DashBoard"
-        component={DashBoardStack}
-      />
-      <Tab.Screen
-        name="Profile"
-        children={() => <ProfileStack setIsLoggedIn={setIsLoggedIn} />}
-      />
+      <Tab.Screen name="Home" component={HomeScreen} />
+      <Tab.Screen name="VoIP">
+        {() => <VoIPStack socket={socket} userPhoneNumber={userPhoneNumber} onStartCall={onStartCall} />}
+      </Tab.Screen>
+      <Tab.Screen name="DashBoard" component={DashBoardScreen} />
+      <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );
 };
-
-const AuthStack = ({ setIsLoggedIn, onLoginSuccess }) => (
-  <Stack.Navigator screenOptions={{ headerShown: false }}>
-    <Stack.Screen name="Login">
-      {(props) => (
-        <LoginScreen
-          {...props}
-          setIsLoggedIn={setIsLoggedIn}
-          onLoginSuccess={onLoginSuccess}
-        />
-      )}
-    </Stack.Screen>
-    <Stack.Screen name="SignUp" component={SignUpScreen} />
-    <Stack.Screen name="PasswordRecovery" component={PasswordRecoveryScreen} />
-    <Stack.Screen name="PasswordChange" component={PasswordChangeScreen} />
-  </Stack.Navigator>
-);
 
 const App = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -156,7 +81,7 @@ const App = () => {
   const [callState, setCallState] = useState('idle');
   const [callModalVisible, setCallModalVisible] = useState(false);
   const [isCaller, setIsCaller] = useState(false);
-  const [callPeer, setCallPeer] = useState({ name: '', number: '' }); // avatar 제거
+  const [callPeer, setCallPeer] = useState({ name: '', number: '' });
   const [remoteStreamExists, setRemoteStreamExists] = useState(false);
 
   useEffect(() => { checkPermissions(); }, []);
@@ -164,19 +89,20 @@ const App = () => {
   const onLoginSuccess = (phoneNumber) => {
     setUserPhoneNumber(phoneNumber);
     setIsLoggedIn(true);
-    const webSocket = io('http://192.168.0.108:3000');
-    
+    const webSocket = io('http://192.168.0.34:3000');
     webSocket.on('connect', () => {
-      console.log('[WebSocket] Connected to the server');
       webSocket.emit('register-user', { phoneNumber });
     });
-
-    webSocket.on('call', ({ from, number, name }) => { // avatar 제거
+    webSocket.on('call', ({ from, number, name }) => {
       setRemotePeerId(from);
-      setCallPeer({ name, number }); // avatar 제거
+      setCallPeer({ name, number });
       setCallState('incoming');
       setCallModalVisible(true);
       setIsCaller(false);
+    });
+
+    webSocket.on('call-ended', () => {
+      handleRejectOrHangup();
     });
 
     setSocket(webSocket);
@@ -191,19 +117,17 @@ const App = () => {
       setIsCaller(false);
       setCallState('idle');
       setCallModalVisible(false);
-      setCallPeer({ name: '', number: '' }); // avatar 제거
+      setCallPeer({ name: '', number: '' });
       setRemoteStreamExists(false);
     }
   }, [isLoggedIn]);
 
   const handleStartCall = (targetPeerId, peerInfo) => {
-    console.log('Starting call to:', targetPeerId);
     setRemotePeerId(targetPeerId);
     setCallPeer(peerInfo);
     setCallState('outgoing');
     setCallModalVisible(true);
     setIsCaller(true);
-    
     if (socket && userPhoneNumber && targetPeerId) {
       socket.emit('call', {
         to: targetPeerId,
@@ -214,18 +138,17 @@ const App = () => {
     }
   };
 
-  const handleAccept = () => {
-    console.log('Call accepted. Changing state to connecting.');
-    setCallState('connecting');
-  };
+  const handleAccept = () => setCallState('connecting');
 
   const handleRejectOrHangup = () => {
-    console.log('Rejecting or hanging up the call. Changing state to ended.');
+    if (socket && remotePeerId) {
+      socket.emit('hangup', { to: remotePeerId, from: socket.id });
+    }
     setCallState('ended');
-    setCallModalVisible(false); 
-    setRemotePeerId(null);      
-    setIsCaller(false);         
-    setCallPeer({ name: '', number: '' }); // avatar 제거
+    setCallModalVisible(false);
+    setRemotePeerId(null);
+    setIsCaller(false);
+    setCallPeer({ name: '', number: '' });
     setRemoteStreamExists(false);
   };
 
@@ -236,13 +159,9 @@ const App = () => {
     isCaller,
     onRemoteStream: (stream) => {
       setRemoteStreamExists(!!stream);
-      setCallState('active'); // Call is active now
+      setCallState('active');
     },
-    onHangup: () => {
-      setRemoteStreamExists(false);
-      setCallModalVisible(false);
-      setCallState('ended'); // Ensure state is ended on hangup
-    }
+    onHangup: () => handleRejectOrHangup(),
   });
 
   return (
@@ -257,10 +176,11 @@ const App = () => {
             onStartCall={handleStartCall}
           />
         ) : (
-          <AuthStack setIsLoggedIn={setIsLoggedIn} onLoginSuccess={onLoginSuccess} />
+          <LoginScreen setIsLoggedIn={setIsLoggedIn} onLoginSuccess={onLoginSuccess} />
         )}
 
-        {callModalVisible && remotePeerId && socket && (
+        {/* CallScreen 모달 */}
+        <Modal visible={callModalVisible} animationType="slide" transparent={false}>
           <CallScreen
             callState={callState}
             peer={callPeer}
@@ -269,7 +189,7 @@ const App = () => {
             onHangup={handleRejectOrHangup}
             remoteStreamExists={remoteStreamExists}
           />
-        )}
+        </Modal>
       </NavigationContainer>
     </ThemeProvider>
   );
