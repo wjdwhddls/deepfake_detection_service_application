@@ -33,8 +33,8 @@ const DashBoardScreen = ({ navigation }) => {
       }
 
       const url = query
-        ? `http://10.0.2.2:3000/api/dashboard/search?title=${query}`
-        : 'http://10.0.2.2:3000/api/dashboard';
+        ? `http://192.168.219.218:3000/api/dashboard/search?title=${query}`
+        : 'http://192.168.219.218:3000/api/dashboard';
 
       const response = await axios.get(url, {
         headers: {

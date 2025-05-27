@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Dimensions } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useIsFocused } from '@react-navigation/native';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -20,10 +20,8 @@ const keypadButtons = [
     { number: '#', label: '' },
 ];
 
-// 하이픈 포함 포맷
 function formatPhoneNumber(number) {
     const onlyNumber = number.replace(/[^0-9]/g, '');
-
     if (onlyNumber.length === 11 && onlyNumber.startsWith('01')) {
         return onlyNumber.replace(/(\d{3})(\d{4})(\d{4})/, '$1-$2-$3');
     }
@@ -39,39 +37,17 @@ function formatPhoneNumber(number) {
     return onlyNumber;
 }
 
-// 여기 추가! userPhoneNumber prop으로 받음
-export default function VoIPScreen({ isFocused, socket, userPhoneNumber, onStartCall }) {
+export default function VoIPScreen({ socket, userPhoneNumber, onStartCall }) {
     const navigation = useNavigation();
+    const isFocused = useIsFocused();
     const [dialedNumber, setDialedNumber] = useState('');
 
-    // 포커스될 때 입력값 초기화(선택 사항)
-    useEffect(() => {
+    // 포커스되면 번호 초기화
+    React.useEffect(() => {
         if (isFocused) {
             setDialedNumber('');
         }
     }, [isFocused]);
-
-    // 전화 수신시 CallScreen으로 이동
-    useEffect(() => {
-        if (!socket) return;
-
-        const onCall = ({ from }) => {
-            navigation.navigate('CallScreen', {
-                peer: {
-                    name: '', // 필요시 상대 이름 조회 등 추가 가능
-                    number: from,
-                },
-                callState: 'incoming',
-            });
-        };
-
-        socket.on('call', onCall);
-
-        // clean up
-        return () => {
-            socket.off('call', onCall);
-        };
-    }, [socket, navigation]);
 
     const handleKeyPress = (number) => {
         const onlyNumber = dialedNumber.replace(/[^0-9]/g, '');
@@ -87,18 +63,13 @@ export default function VoIPScreen({ isFocused, socket, userPhoneNumber, onStart
     const handleCall = () => {
         const formattedNumber = formatPhoneNumber(dialedNumber);
         if (formattedNumber) {
-            if (socket && typeof socket.emit === 'function') {
-                socket.emit('call', { to: formattedNumber, from: userPhoneNumber });
-            }
+            onStartCall(formattedNumber, { name: '' });
             navigation.navigate('CallScreen', {
-                peer: {
-                    name: '',
-                    number: formattedNumber,
-                },
+                peer: { name: '', number: formattedNumber },
                 callState: 'outgoing',
             });
         } else {
-            console.warn("Please enter a valid number to call.");
+            console.warn('Please enter a valid number to call.');
         }
     };
 
@@ -109,9 +80,7 @@ export default function VoIPScreen({ isFocused, socket, userPhoneNumber, onStart
             </View>
 
             <View style={styles.dialedNumberContainer}>
-                <Text style={styles.dialedNumber}>
-                    {formatPhoneNumber(dialedNumber)}
-                </Text>
+                <Text style={styles.dialedNumber}>{formatPhoneNumber(dialedNumber)}</Text>
             </View>
 
             <View style={styles.keypadContainer}>
@@ -129,10 +98,7 @@ export default function VoIPScreen({ isFocused, socket, userPhoneNumber, onStart
             </View>
 
             <View style={styles.buttonContainer}>
-                <TouchableOpacity 
-                    style={styles.callButton} 
-                    onPress={() => onStartCall(formatPhoneNumber(dialedNumber), { name: '' })}
-                >
+                <TouchableOpacity style={styles.callButton} onPress={handleCall}>
                     <Icon name="call" size={28} color="#FFFFFF" />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.backspaceButton} onPress={handleBackspace}>

@@ -156,7 +156,7 @@ const App = () => {
   const [callState, setCallState] = useState('idle');
   const [callModalVisible, setCallModalVisible] = useState(false);
   const [isCaller, setIsCaller] = useState(false);
-  const [callPeer, setCallPeer] = useState({ name: '', number: '' }); // avatar 제거
+  const [callPeer, setCallPeer] = useState({ name: '', number: '' });
   const [remoteStreamExists, setRemoteStreamExists] = useState(false);
 
   useEffect(() => { checkPermissions(); }, []);
@@ -164,19 +164,25 @@ const App = () => {
   const onLoginSuccess = (phoneNumber) => {
     setUserPhoneNumber(phoneNumber);
     setIsLoggedIn(true);
-    const webSocket = io('http://192.168.0.108:3000');
-    
+    const webSocket = io('http://192.168.219.218:3000');
+
     webSocket.on('connect', () => {
       console.log('[WebSocket] Connected to the server');
       webSocket.emit('register-user', { phoneNumber });
     });
 
-    webSocket.on('call', ({ from, number, name }) => { // avatar 제거
+    webSocket.on('call', ({ from, number, name }) => {
       setRemotePeerId(from);
-      setCallPeer({ name, number }); // avatar 제거
+      setCallPeer({ name, number });
       setCallState('incoming');
       setCallModalVisible(true);
       setIsCaller(false);
+    });
+
+    webSocket.on('call-ack', ({ toSocketId }) => {
+      console.log('[WebSocket] call-ack received. Setting remotePeerId:', toSocketId);
+      setRemotePeerId(toSocketId);
+      setCallState('connecting'); 
     });
 
     setSocket(webSocket);
@@ -191,23 +197,23 @@ const App = () => {
       setIsCaller(false);
       setCallState('idle');
       setCallModalVisible(false);
-      setCallPeer({ name: '', number: '' }); // avatar 제거
+      setCallPeer({ name: '', number: '' });
       setRemoteStreamExists(false);
     }
   }, [isLoggedIn]);
 
-  const handleStartCall = (targetPeerId, peerInfo) => {
-    console.log('Starting call to:', targetPeerId);
-    setRemotePeerId(targetPeerId);
+  const handleStartCall = (targetPhoneNumber, peerInfo) => {
+    console.log('Starting call to:', targetPhoneNumber);
+    setRemotePeerId(null); // 서버로부터 받을 예정
     setCallPeer(peerInfo);
     setCallState('outgoing');
     setCallModalVisible(true);
     setIsCaller(true);
-    
-    if (socket && userPhoneNumber && targetPeerId) {
+
+    if (socket && userPhoneNumber && targetPhoneNumber) {
       socket.emit('call', {
-        to: targetPeerId,
-        from: socket.id,
+        to: targetPhoneNumber,
+        from: userPhoneNumber,
         number: userPhoneNumber,
         name: userPhoneNumber,
       });
@@ -222,10 +228,10 @@ const App = () => {
   const handleRejectOrHangup = () => {
     console.log('Rejecting or hanging up the call. Changing state to ended.');
     setCallState('ended');
-    setCallModalVisible(false); 
-    setRemotePeerId(null);      
-    setIsCaller(false);         
-    setCallPeer({ name: '', number: '' }); // avatar 제거
+    setCallModalVisible(false);
+    setRemotePeerId(null);
+    setIsCaller(false);
+    setCallPeer({ name: '', number: '' });
     setRemoteStreamExists(false);
   };
 
@@ -236,12 +242,12 @@ const App = () => {
     isCaller,
     onRemoteStream: (stream) => {
       setRemoteStreamExists(!!stream);
-      setCallState('active'); // Call is active now
+      setCallState('active');
     },
     onHangup: () => {
       setRemoteStreamExists(false);
       setCallModalVisible(false);
-      setCallState('ended'); // Ensure state is ended on hangup
+      setCallState('ended');
     }
   });
 
@@ -260,7 +266,7 @@ const App = () => {
           <AuthStack setIsLoggedIn={setIsLoggedIn} onLoginSuccess={onLoginSuccess} />
         )}
 
-        {callModalVisible && remotePeerId && socket && (
+        {callModalVisible && callPeer.number && socket && (
           <CallScreen
             callState={callState}
             peer={callPeer}

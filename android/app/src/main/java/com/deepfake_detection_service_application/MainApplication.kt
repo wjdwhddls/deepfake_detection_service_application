@@ -11,13 +11,16 @@ import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import com.facebook.react.defaults.DefaultReactNativeHost
 import com.facebook.react.soloader.OpenSourceMergedSoMapping
 import com.facebook.soloader.SoLoader
+import com.oney.WebRTCModule.WebRTCModulePackage
 
 class MainApplication : Application(), ReactApplication {
 
     override val reactNativeHost: ReactNativeHost =
         object : DefaultReactNativeHost(this) {
             override fun getPackages(): List<ReactPackage> =
-                PackageList(this).packages // 사용자 정의 패키지 불필요!
+                PackageList(this).packages.apply {
+                    add(WebRTCModulePackage()) // 수동 등록
+                }
 
             override fun getJSMainModuleName(): String = "index"
 
