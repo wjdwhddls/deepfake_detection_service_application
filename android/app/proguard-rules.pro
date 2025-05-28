@@ -9,3 +9,5 @@
 
 # Add any project specific keep options here:
 -keep class org.webrtc.** { *; }
+-keep class org.webrtc.** { *; }
+-dontwarn org.webrtc.**
