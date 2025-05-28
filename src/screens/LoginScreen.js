@@ -16,7 +16,7 @@ const LoginScreen = ({ setIsLoggedIn,  onLoginSuccess }) => {
     console.log('로그인 요청 값:', { user_id: trimmedEmail, user_pw: trimmedPassword });
 
     try {
-      const response = await axios.post('http:/192.168.219.218:3000/api/auth/signin', {
+      const response = await axios.post('http://192.168.219.73:3000/api/auth/signin', {
         user_id: trimmedEmail,
         user_pw: trimmedPassword,
       }, {

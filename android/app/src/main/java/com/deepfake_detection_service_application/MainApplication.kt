@@ -17,10 +17,11 @@ class MainApplication : Application(), ReactApplication {
 
     override val reactNativeHost: ReactNativeHost =
         object : DefaultReactNativeHost(this) {
-            override fun getPackages(): List<ReactPackage> =
-                PackageList(this).packages.apply {
-                    add(WebRTCModulePackage()) // 수동 등록
-                }
+            override fun getPackages(): List<ReactPackage> {
+                val packages = PackageList(this).packages.toMutableList()
+                packages.add(WebRTCModulePackage()) // WebRTC 모듈 수동 등록
+                return packages
+            }
 
             override fun getJSMainModuleName(): String = "index"
 

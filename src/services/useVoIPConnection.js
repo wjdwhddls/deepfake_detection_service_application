@@ -7,11 +7,7 @@ import {
 } from 'react-native-webrtc';
 
 const peerConfig = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:global.stun.twilio.com:3478?transport=udp' },
-  ],
+  iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }],
 };
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -42,68 +38,85 @@ export default function useVoIPConnection({
         return;
       }
 
-      console.log('[VoIP] \uD83D\uDD27 Initializing VoIP connection...');
-      console.log('[VoIP] \u2794 isCaller:', isCaller);
+      console.log('[VoIP] 🔧 Initializing VoIP connection...');
+      console.log('[VoIP] ➔ isCaller:', isCaller);
 
       try {
         const stream = await mediaDevices.getUserMedia({ audio: true });
-        console.log('[VoIP] \uD83C\uDF99\uFE0F Local media stream acquired:', stream.toURL?.() ?? stream);
+        console.log('[VoIP] 🎙️ Local media stream acquired:', stream.toURL?.() ?? stream);
         localStreamRef.current = stream;
 
         await sleep(300);
 
         if (pc.current) {
-          console.warn('[VoIP] \u26A0\uFE0F PeerConnection already exists!');
+          console.warn('[VoIP] ⚠️ PeerConnection already exists!');
           return;
         }
 
-        pc.current = new RTCPeerConnection(peerConfig);
-        console.log('[VoIP] \uD83E\uDDF1 Created RTCPeerConnection');
+        try {
+          pc.current = new RTCPeerConnection(peerConfig);
+        } catch (e) {
+          console.error('[VoIP] ❌ Failed to initialize PeerConnection:', e);
+          if (onHangup) onHangup('peerconnection_error', e?.message || e);
+          return;
+        }
+
+        console.log('[VoIP] 🧑‍🔧 Created RTCPeerConnection');
 
         stream.getTracks().forEach((track) => {
           pc.current.addTrack(track, stream);
-          console.log(`[VoIP] \u2795 Added local track (${track.kind})`);
+          console.log(`[VoIP] ➕ Added local track (${track.kind})`);
         });
 
         pc.current.oniceconnectionstatechange = () => {
-          console.log('[VoIP] ICE connection state:', pc.current.iceConnectionState);
+          if (!pc.current) {
+            console.warn('[VoIP] ICE connection state change event triggered but pc is null');
+            return;
+          }
+          const state = pc.current.iceConnectionState;
+          console.log('[VoIP] ICE connection state:', state);
+          if (["failed", "disconnected", "closed"].includes(state)) {
+            if (!isClosed && onHangup) {
+              onHangup('ice_disconnected');
+            }
+          }
         };
 
         pc.current.ontrack = (event) => {
           if (isClosed) return;
-          console.log('[VoIP] \uD83D\uDCF1 Received remote track:', event.track.kind);
+          console.log('[VoIP] 📱 Received remote track:', event.track.kind);
           const stream = event.streams[0] || remoteMediaStream.current;
           remoteMediaStream.current.addTrack(event.track);
           if (onRemoteStream) {
-            console.log('[VoIP] \uD83C\uDFA7 Calling onRemoteStream...');
+            console.log('[VoIP] 🎧 Calling onRemoteStream...');
             onRemoteStream(stream);
           }
         };
 
         pc.current.onicecandidate = (e) => {
-          if (e.candidate && socket.connected) {
-            console.log('[VoIP] \u2744\uFE0F Sending ICE candidate');
+          if (e.candidate && socket?.connected) {
+            console.log('[VoIP] ❄️ Sending ICE candidate');
             socket.emit('ice', {
               candidate: e.candidate,
               to: remotePeerId,
               from: socket.id,
             });
           } else {
-            console.log('[VoIP] \u2705 ICE candidate gathering complete');
+            console.log('[VoIP] ✅ ICE candidate gathering complete');
           }
         };
 
         signalHandlers.handleOffer = async ({ offer, from }) => {
           if (isClosed || !pc.current) return;
-          console.log('[VoIP] \uD83D\uDCE9 Received offer from', from);
+          console.log('[VoIP] 📩 Received offer from', from);
           try {
             await pc.current.setRemoteDescription(new RTCSessionDescription(offer));
             const answer = await pc.current.createAnswer();
             await pc.current.setLocalDescription(answer);
             socket.emit('answer', { answer, to: from, from: socket.id });
-            console.log('[VoIP] \uD83D\uDCE4 Sent answer to', from);
+            console.log('[VoIP] 📤 Sent answer to', from);
           } catch (err) {
-            console.error('[VoIP] \u274C Failed to handle offer:', err);
+            console.error('[VoIP] ❌ Failed to handle offer:', err);
           }
         };
 
@@ -111,10 +124,10 @@ export default function useVoIPConnection({
           if (isClosed || !pc.current) return;
           try {
             await pc.current.setRemoteDescription(new RTCSessionDescription(answer));
-            console.log('[VoIP] \u2705 Set remote description (answer)');
+            console.log('[VoIP] ✅ Set remote description (answer)');
             if (onRemoteStream) onRemoteStream(remoteMediaStream.current);
           } catch (err) {
-            console.error('[VoIP] \u274C Failed to handle answer:', err);
+            console.error('[VoIP] ❌ Failed to handle answer:', err);
           }
         };
 
@@ -122,17 +135,17 @@ export default function useVoIPConnection({
           if (candidate && pc.current) {
             try {
               await pc.current.addIceCandidate(candidate);
-              console.log('[VoIP] \u2795 Added remote ICE candidate');
+              console.log('[VoIP] ➕ Added remote ICE candidate');
             } catch (e) {
-              console.error('[VoIP] \u274C Error adding ICE candidate:', e);
+              console.error('[VoIP] ❌ Error adding ICE candidate:', e);
             }
           }
         };
 
-        socket.on('offer', signalHandlers.handleOffer);
-        socket.on('answer', signalHandlers.handleAnswer);
-        socket.on('ice', signalHandlers.handleIce);
-        console.log('[VoIP] \uD83D\uDCF1 Signal handlers registered');
+        socket.off('offer').on('offer', signalHandlers.handleOffer);
+        socket.off('answer').on('answer', signalHandlers.handleAnswer);
+        socket.off('ice').on('ice', signalHandlers.handleIce);
+        console.log('[VoIP] 📱 Signal handlers registered');
 
         if (isCaller) {
           try {
@@ -143,13 +156,13 @@ export default function useVoIPConnection({
               to: remotePeerId,
               from: socket.id,
             });
-            console.log('[VoIP] \u260E\uFE0F Created and sent offer to', remotePeerId);
+            console.log('[VoIP] ☎️ Created and sent offer to', remotePeerId);
           } catch (err) {
-            console.error('[VoIP] \u274C Failed to create/send offer:', err);
+            console.error('[VoIP] ❌ Failed to create/send offer:', err);
           }
         }
       } catch (err) {
-        console.error('[VoIP] \u274C Error during initConnection:', err);
+        console.error('[VoIP] ❌ Error during initConnection:', err);
         if (onHangup) onHangup('init_error', err?.message || err);
       }
     };
@@ -158,7 +171,7 @@ export default function useVoIPConnection({
 
     return () => {
       isClosed = true;
-      console.log('[VoIP] \uD83D\uDD27 Cleaning up connection');
+      console.log('[VoIP] 🔧 Cleaning up connection');
 
       socket?.off('offer', signalHandlers.handleOffer);
       socket?.off('answer', signalHandlers.handleAnswer);
@@ -167,9 +180,9 @@ export default function useVoIPConnection({
       if (pc.current) {
         try {
           pc.current.close();
-          console.log('[VoIP] \uD83D\uDD0C Closed RTCPeerConnection');
+          console.log('[VoIP] 🔌 Closed RTCPeerConnection');
         } catch (e) {
-          console.warn('[VoIP] \u26A0\uFE0F Error closing RTCPeerConnection:', e);
+          console.warn('[VoIP] ⚠️ Error closing RTCPeerConnection:', e);
         }
         pc.current = null;
       }
@@ -177,9 +190,9 @@ export default function useVoIPConnection({
       if (localStreamRef.current) {
         try {
           localStreamRef.current.getTracks().forEach((track) => track.stop());
-          console.log('[VoIP] \uD83C\uDF99\uFE0F Stopped local stream tracks');
+          console.log('[VoIP] 🎙️ Stopped local stream tracks');
         } catch (e) {
-          console.warn('[VoIP] \u26A0\uFE0F Error stopping tracks:', e);
+          console.warn('[VoIP] ⚠️ Error stopping tracks:', e);
         }
         localStreamRef.current = null;
       }

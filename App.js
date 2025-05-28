@@ -52,9 +52,18 @@ const ProfileStack = ({ setIsLoggedIn }) => (
   </Stack.Navigator>
 );
 
-const DetectStack = () => (
+const DetectStack = ({ userPhoneNumber, socket, setRemotePeerId }) => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
-    <Stack.Screen name="DetectMain" component={HomeScreen} />
+    <Stack.Screen name="DetectMain">
+      {props => (
+        <HomeScreen
+          {...props}
+          socket={socket}
+          setRemotePeerId={setRemotePeerId}
+          userPhoneNumber={userPhoneNumber}
+        />
+      )}
+    </Stack.Screen>
     <Stack.Screen name="DetectDetail" component={ResultScreen} />
   </Stack.Navigator>
 );
@@ -71,6 +80,7 @@ const VoIPStack = ({ socket, userPhoneNumber, onStartCall }) => (
         />
       )}
     </Stack.Screen>
+    <Stack.Screen name="CallScreen" component={CallScreen} />
   </Stack.Navigator>
 );
 
@@ -92,7 +102,15 @@ const MainTabNavigator = ({ socket, setRemotePeerId, userPhoneNumber, setIsLogge
         headerShown: false,
       })}
     >
-      <Tab.Screen name="Home" component={DetectStack} />
+      <Tab.Screen name="Home">
+        {() => (
+          <DetectStack
+            socket={socket}
+            setRemotePeerId={setRemotePeerId}
+            userPhoneNumber={userPhoneNumber}
+          />
+        )}
+      </Tab.Screen>
       <Tab.Screen name="VoIP">
         {() => <VoIPStack socket={socket} userPhoneNumber={userPhoneNumber} onStartCall={onStartCall} />}
       </Tab.Screen>
@@ -132,12 +150,14 @@ const App = () => {
   const [callPeer, setCallPeer] = useState({ name: '', number: '' });
   const [remoteStreamExists, setRemoteStreamExists] = useState(false);
 
-  useEffect(() => { checkPermissions(); }, []);
+  useEffect(() => {
+    checkPermissions();
+  }, []);
 
   const onLoginSuccess = (phoneNumber) => {
     setUserPhoneNumber(phoneNumber);
     setIsLoggedIn(true);
-    const webSocket = io('http://192.168.0.34:3000');
+    const webSocket = io('http://192.168.219.73:3000');
 
     webSocket.on('connect', () => {
       webSocket.emit('register-user', { phoneNumber });
@@ -180,13 +200,13 @@ const App = () => {
 
   const handleStartCall = (targetPhoneNumber, peerInfo) => {
     console.log('Starting call to:', targetPhoneNumber);
-    setRemotePeerId(null); // 서버 응답에서 받을 예정
+    setRemotePeerId(null);
     setCallPeer(peerInfo);
     setCallState('outgoing');
     setCallModalVisible(true);
     setIsCaller(true);
 
-    if (socket && userPhoneNumber && targetPhoneNumber) {
+    if (socket?.connected && userPhoneNumber && targetPhoneNumber) {
       socket.emit('call', {
         to: targetPhoneNumber,
         from: userPhoneNumber,
@@ -211,7 +231,7 @@ const App = () => {
   };
 
   useVoIPConnection({
-    enabled: callModalVisible && ['connecting', 'active'].includes(callState),
+    enabled: callModalVisible && ['connecting', 'active'].includes(callState) && !!remotePeerId,
     remotePeerId,
     socket,
     isCaller,
