@@ -26,6 +26,7 @@ import PostDetailScreen from './src/screens/PostDetailScreen';
 import ResultScreen from './src/screens/ResultScreen';
 import VoIPScreen from './src/screens/VoIPScreen';
 import CallScreen from './src/screens/CallScreen';
+import InCallScreen from './src/screens/InCallScreen';
 import useVoIPConnection from './src/services/useVoIPConnection';
 
 const Tab = createBottomTabNavigator();
@@ -80,7 +81,6 @@ const VoIPStack = ({ socket, userPhoneNumber, onStartCall }) => (
         />
       )}
     </Stack.Screen>
-    <Stack.Screen name="CallScreen" component={CallScreen} />
   </Stack.Navigator>
 );
 
@@ -150,9 +150,7 @@ const App = () => {
   const [callPeer, setCallPeer] = useState({ name: '', number: '' });
   const [remoteStreamExists, setRemoteStreamExists] = useState(false);
 
-  useEffect(() => {
-    checkPermissions();
-  }, []);
+  useEffect(() => { checkPermissions(); }, []);
 
   const onLoginSuccess = (phoneNumber) => {
     setUserPhoneNumber(phoneNumber);
@@ -172,7 +170,6 @@ const App = () => {
     });
 
     webSocket.on('call-ack', ({ toSocketId }) => {
-      console.log('[WebSocket] call-ack received. Setting remotePeerId:', toSocketId);
       setRemotePeerId(toSocketId);
       setCallState('connecting');
     });
@@ -199,13 +196,11 @@ const App = () => {
   }, [isLoggedIn]);
 
   const handleStartCall = (targetPhoneNumber, peerInfo) => {
-    console.log('Starting call to:', targetPhoneNumber);
     setRemotePeerId(null);
     setCallPeer(peerInfo);
     setCallState('outgoing');
     setCallModalVisible(true);
     setIsCaller(true);
-
     if (socket?.connected && userPhoneNumber && targetPhoneNumber) {
       socket.emit('call', {
         to: targetPhoneNumber,
@@ -257,16 +252,20 @@ const App = () => {
           <AuthStack setIsLoggedIn={setIsLoggedIn} onLoginSuccess={onLoginSuccess} />
         )}
 
-        <Modal visible={callModalVisible} animationType="slide" transparent={false}>
-          <CallScreen
-            callState={callState}
-            peer={callPeer}
-            onAccept={handleAccept}
-            onReject={handleRejectOrHangup}
-            onHangup={handleRejectOrHangup}
-            remoteStreamExists={remoteStreamExists}
-          />
-        </Modal>
+        {callState === 'active' ? (
+          <InCallScreen peer={callPeer} onHangup={handleRejectOrHangup} />
+        ) : (
+          <Modal visible={callModalVisible} animationType="slide" transparent={false}>
+            <CallScreen
+              callState={callState}
+              peer={callPeer}
+              onAccept={handleAccept}
+              onReject={handleRejectOrHangup}
+              onHangup={handleRejectOrHangup}
+              remoteStreamExists={remoteStreamExists}
+            />
+          </Modal>
+        )}
       </NavigationContainer>
     </ThemeProvider>
   );

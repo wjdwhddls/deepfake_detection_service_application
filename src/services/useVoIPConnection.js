@@ -43,7 +43,7 @@ export default function useVoIPConnection({
 
       try {
         const stream = await mediaDevices.getUserMedia({ audio: true });
-        console.log('[VoIP] 🎙️ Local media stream acquired:', stream.toURL?.() ?? stream);
+        console.log('[VoIP] 🎧 Local media stream acquired:', stream.toURL?.() ?? stream);
         localStreamRef.current = stream;
 
         await sleep(300);
@@ -61,7 +61,7 @@ export default function useVoIPConnection({
           return;
         }
 
-        console.log('[VoIP] 🧑‍🔧 Created RTCPeerConnection');
+        console.log('[VoIP] 🧑‍💻 Created RTCPeerConnection');
 
         stream.getTracks().forEach((track) => {
           pc.current.addTrack(track, stream);
@@ -143,10 +143,9 @@ export default function useVoIPConnection({
         socket.off('ice').on('ice', signalHandlers.handleIce);
         console.log('[VoIP] 📱 Signal handlers registered');
 
-        // 💡 offer는 remotePeerId가 확실히 있을 때만 실행되도록 방지
         if (isCaller) {
           if (!remotePeerId) {
-            console.warn('[VoIP] ❗ Cannot send offer: remotePeerId is null');
+            console.warn('[VoIP] ❗️ Cannot send offer: remotePeerId is null');
             return;
           }
           try {
@@ -191,7 +190,7 @@ export default function useVoIPConnection({
       if (localStreamRef.current) {
         try {
           localStreamRef.current.getTracks().forEach((track) => track.stop());
-          console.log('[VoIP] 🎙️ Stopped local stream tracks');
+          console.log('[VoIP] 🎧 Stopped local stream tracks');
         } catch (e) {
           console.warn('[VoIP] ⚠️ Error stopping tracks:', e);
         }
