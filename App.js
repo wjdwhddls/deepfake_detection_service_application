@@ -27,6 +27,7 @@ import ResultScreen from './src/screens/ResultScreen';
 import VoIPScreen from './src/screens/VoIPScreen';
 import CallScreen from './src/screens/CallScreen';
 import InCallScreen from './src/screens/InCallScreen';
+import CreatePostScreen from './src/screens/CreatePostScreen';
 import useVoIPConnection from './src/services/useVoIPConnection';
 
 const Tab = createBottomTabNavigator();
@@ -36,6 +37,7 @@ const DashBoardStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="DashBoardMain" component={DashBoardScreen} />
     <Stack.Screen name="PostDetail" component={PostDetailScreen} />
+    <Stack.Screen name="WritePost" component={CreatePostScreen} />
   </Stack.Navigator>
 );
 
