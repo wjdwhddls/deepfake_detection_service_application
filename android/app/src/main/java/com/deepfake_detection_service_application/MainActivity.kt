@@ -1,5 +1,6 @@
 package com.deepfake_detection_service_application
 
+import android.os.Bundle
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnabled
@@ -14,8 +15,15 @@ class MainActivity : ReactActivity() {
   override fun getMainComponentName(): String = "deepfake_detection_service_application"
 
   /**
+   * Prevents Android from restoring fragments automatically to avoid ScreenFragment crash
+   */
+  override fun onCreate(savedInstanceState: Bundle?) {
+    super.onCreate(null) // <- 핵심 수정사항
+  }
+
+  /**
    * Returns the instance of the [ReactActivityDelegate]. We use [DefaultReactActivityDelegate]
-   * which allows you to enable New Architecture with a single boolean flags [fabricEnabled]
+   * which allows you to enable New Architecture with a single boolean flag [fabricEnabled]
    */
   override fun createReactActivityDelegate(): ReactActivityDelegate =
       DefaultReactActivityDelegate(this, mainComponentName, fabricEnabled)

@@ -53,18 +53,9 @@ const ProfileStack = ({ setIsLoggedIn }) => (
   </Stack.Navigator>
 );
 
-const DetectStack = ({ userPhoneNumber, socket, setRemotePeerId }) => (
+const DetectStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
-    <Stack.Screen name="DetectMain">
-      {props => (
-        <HomeScreen
-          {...props}
-          socket={socket}
-          setRemotePeerId={setRemotePeerId}
-          userPhoneNumber={userPhoneNumber}
-        />
-      )}
-    </Stack.Screen>
+    <Stack.Screen name="DetectMain" component={HomeScreen} />
     <Stack.Screen name="DetectDetail" component={ResultScreen} />
   </Stack.Navigator>
 );
@@ -84,7 +75,7 @@ const VoIPStack = ({ socket, userPhoneNumber, onStartCall }) => (
   </Stack.Navigator>
 );
 
-const MainTabNavigator = ({ socket, setRemotePeerId, userPhoneNumber, setIsLoggedIn, onStartCall }) => {
+const MainTabNavigator = ({ socket, userPhoneNumber, setIsLoggedIn, onStartCall }) => {
   const { isLightMode } = useTheme();
   return (
     <Tab.Navigator
@@ -102,15 +93,7 @@ const MainTabNavigator = ({ socket, setRemotePeerId, userPhoneNumber, setIsLogge
         headerShown: false,
       })}
     >
-      <Tab.Screen name="Home">
-        {() => (
-          <DetectStack
-            socket={socket}
-            setRemotePeerId={setRemotePeerId}
-            userPhoneNumber={userPhoneNumber}
-          />
-        )}
-      </Tab.Screen>
+      <Tab.Screen name="Home" component={DetectStack} />
       <Tab.Screen name="VoIP">
         {() => <VoIPStack socket={socket} userPhoneNumber={userPhoneNumber} onStartCall={onStartCall} />}
       </Tab.Screen>
@@ -155,13 +138,15 @@ const App = () => {
   const onLoginSuccess = (phoneNumber) => {
     setUserPhoneNumber(phoneNumber);
     setIsLoggedIn(true);
-    const webSocket = io('http://172.30.1.63:3000');
+    const webSocket = io('http://172.30.1.96:3000');
 
     webSocket.on('connect', () => {
+      console.log('[Socket] Connected');
       webSocket.emit('register-user', { phoneNumber });
     });
 
     webSocket.on('call', ({ from, number, name }) => {
+      console.log('[Socket] Received call from:', from);
       setRemotePeerId(from);
       setCallPeer({ name, number });
       setCallState('incoming');
@@ -170,6 +155,7 @@ const App = () => {
     });
 
     webSocket.on('call-ack', ({ toSocketId }) => {
+      console.log('[Socket] Received call-ack with toSocketId:', toSocketId);
       setRemotePeerId(toSocketId);
       setCallState('connecting');
     });
@@ -196,12 +182,13 @@ const App = () => {
   }, [isLoggedIn]);
 
   const handleStartCall = (targetPhoneNumber, peerInfo) => {
-    setRemotePeerId(null);
     setCallPeer(peerInfo);
     setCallState('outgoing');
     setCallModalVisible(true);
     setIsCaller(true);
+
     if (socket?.connected && userPhoneNumber && targetPhoneNumber) {
+      console.log('[Socket] Emitting call to:', targetPhoneNumber);
       socket.emit('call', {
         to: targetPhoneNumber,
         from: userPhoneNumber,
@@ -226,15 +213,18 @@ const App = () => {
   };
 
   useVoIPConnection({
-    enabled: callModalVisible && ['connecting', 'active'].includes(callState) && !!remotePeerId,
+    enabled: callModalVisible && ['connecting', 'active', 'incoming'].includes(callState) && !!remotePeerId,
     remotePeerId,
     socket,
     isCaller,
     onRemoteStream: (stream) => {
-      setRemoteStreamExists(!!stream);
-      setCallState('active');
+      if (stream) {
+        console.log('[VoIP] Remote stream received');
+        setRemoteStreamExists(true);
+        setCallState('active');
+      }
     },
-    onHangup: () => handleRejectOrHangup(),
+    onHangup: handleRejectOrHangup,
   });
 
   return (
@@ -243,7 +233,6 @@ const App = () => {
         {isLoggedIn ? (
           <MainTabNavigator
             socket={socket}
-            setRemotePeerId={setRemotePeerId}
             userPhoneNumber={userPhoneNumber}
             setIsLoggedIn={setIsLoggedIn}
             onStartCall={handleStartCall}
@@ -252,10 +241,10 @@ const App = () => {
           <AuthStack setIsLoggedIn={setIsLoggedIn} onLoginSuccess={onLoginSuccess} />
         )}
 
-        {callState === 'active' ? (
-          <InCallScreen peer={callPeer} onHangup={handleRejectOrHangup} />
-        ) : (
-          <Modal visible={callModalVisible} animationType="slide" transparent={false}>
+        <Modal visible={callModalVisible} animationType="slide" transparent={false}>
+          {callState === 'active' && callPeer?.number ? (
+            <InCallScreen peer={callPeer} onHangup={handleRejectOrHangup} />
+          ) : (
             <CallScreen
               callState={callState}
               peer={callPeer}
@@ -264,8 +253,8 @@ const App = () => {
               onHangup={handleRejectOrHangup}
               remoteStreamExists={remoteStreamExists}
             />
-          </Modal>
-        )}
+          )}
+        </Modal>
       </NavigationContainer>
     </ThemeProvider>
   );
