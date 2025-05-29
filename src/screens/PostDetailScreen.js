@@ -38,7 +38,7 @@ const PostDetailScreen = () => {
       }
 
       const response = await axios.get(
-        `http://10.0.2.2:3000/api/dashboard/${id}/detail`,
+        `http://172.30.1.63:3000/api/dashboard/${id}/detail`,
         {
           headers: {
             Authorization: `Bearer ${token}`, // Bearer 토큰 사용
@@ -71,7 +71,7 @@ const PostDetailScreen = () => {
     const token = await AsyncStorage.getItem('token'); // AsyncStorage에서 토큰 가져오기
     try {
       const response = await axios.post(
-        `http://10.0.2.2:3000/api/dashboard/${id}/comments`, // 댓글 추가 API URL
+        `http://172.30.1.63:3000/api/dashboard/${id}/comments`, // 댓글 추가 API URL
         { text: newComment }, // 새 댓글 데이터
         {
           headers: {
@@ -105,7 +105,7 @@ const PostDetailScreen = () => {
       setLiked(newLikeStatus); // 좋아요 상태 업데이트
 
       const response = await axios.post(
-        `http://10.0.2.2:3000/api/dashboard/${id}/like`, // 좋아요 추가 API URL
+        `http://172.30.1.63:3000/api/dashboard/${id}/like`, // 좋아요 추가 API URL
         { liked: newLikeStatus },
         {
           headers: {
