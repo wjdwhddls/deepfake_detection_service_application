@@ -69,11 +69,7 @@ export default function useVoIPConnection({
         });
 
         pc.current.oniceconnectionstatechange = () => {
-          if (!pc.current) {
-            console.warn('[VoIP] ICE connection state change event triggered but pc is null');
-            return;
-          }
-          const state = pc.current.iceConnectionState;
+          const state = pc.current?.iceConnectionState;
           console.log('[VoIP] ICE connection state:', state);
           if (["failed", "disconnected", "closed"].includes(state)) {
             if (!isClosed && onHangup) {
@@ -94,7 +90,7 @@ export default function useVoIPConnection({
         };
 
         pc.current.onicecandidate = (e) => {
-          if (e.candidate && socket?.connected) {
+          if (e.candidate && socket?.connected && remotePeerId) {
             console.log('[VoIP] ❄️ Sending ICE candidate');
             socket.emit('ice', {
               candidate: e.candidate,
@@ -147,7 +143,12 @@ export default function useVoIPConnection({
         socket.off('ice').on('ice', signalHandlers.handleIce);
         console.log('[VoIP] 📱 Signal handlers registered');
 
+        // 💡 offer는 remotePeerId가 확실히 있을 때만 실행되도록 방지
         if (isCaller) {
+          if (!remotePeerId) {
+            console.warn('[VoIP] ❗ Cannot send offer: remotePeerId is null');
+            return;
+          }
           try {
             const offer = await pc.current.createOffer();
             await pc.current.setLocalDescription(offer);

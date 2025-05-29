@@ -157,7 +157,7 @@ const App = () => {
   const onLoginSuccess = (phoneNumber) => {
     setUserPhoneNumber(phoneNumber);
     setIsLoggedIn(true);
-    const webSocket = io('http://192.168.219.73:3000');
+    const webSocket = io('http://172.30.1.63:3000');
 
     webSocket.on('connect', () => {
       webSocket.emit('register-user', { phoneNumber });
