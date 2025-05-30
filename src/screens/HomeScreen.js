@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  TextInput,
   Alert,
   Platform,
   Image,
@@ -61,7 +60,7 @@ const HomeScreen = () => {
       });
 
       const serverUrl = Platform.OS === 'android'
-        ? 'http://10.0.2.2:3000/files/upload'
+        ? 'http://192.168.219.125:3000/files/upload'
         : 'http://127.0.0.1:3000/files/upload';
 
       const response = await axios.post(serverUrl, formData, {
@@ -69,7 +68,13 @@ const HomeScreen = () => {
       });
 
       const serverData = response.data;
-      setResultData(serverData);
+      console.log('서버 응답:', serverData);
+
+      setResultData({
+        result: serverData.result,
+        averageFakeProb: serverData.average_fake_prob,
+        riskLevel: serverData.risk_level,
+      });
     } catch (error) {
       console.error('파일 업로드 중 오류:', error);
       if (error.response) console.error('서버 응답:', error.response.data);
@@ -83,7 +88,7 @@ const HomeScreen = () => {
   };
 
   const handleDetailView = () => {
-    navigation.navigate('DetectDetail', { result: resultData });
+    navigation.navigate('ResultScreen', { result: resultData });
   };
 
   const styles = getDynamicStyles(isLightMode);
@@ -114,6 +119,26 @@ const HomeScreen = () => {
           <Text style={styles.resultText}>
             <Text style={styles.resultLabel}>결과: </Text>
             {resultData.result}
+          </Text>
+          <Text style={styles.resultText}>
+            <Text style={styles.resultLabel}>가짜 확률: </Text>
+            {resultData.averageFakeProb?.toFixed(2)}%
+          </Text>
+          <Text
+            style={[
+              styles.resultText,
+              {
+                color:
+                  resultData.riskLevel === '위험'
+                    ? 'red'
+                    : resultData.riskLevel === '경고'
+                    ? 'orange'
+                    : 'green',
+              },
+            ]}
+          >
+            <Text style={styles.resultLabel}>위험도: </Text>
+            {resultData.riskLevel}
           </Text>
 
           <View style={styles.buttonRow}>
