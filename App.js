@@ -1,5 +1,4 @@
-// App.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Modal } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -27,6 +26,7 @@ import ResultScreen from './src/screens/ResultScreen';
 import VoIPScreen from './src/screens/VoIPScreen';
 import CallScreen from './src/screens/CallScreen';
 import InCallScreen from './src/screens/InCallScreen';
+import WarningScreen from './src/screens/WarningScreen';
 import useVoIPConnection from './src/services/useVoIPConnection';
 
 const Tab = createBottomTabNavigator();
@@ -132,6 +132,8 @@ const App = () => {
   const [isCaller, setIsCaller] = useState(false);
   const [callPeer, setCallPeer] = useState({ name: '', number: '' });
   const [remoteStreamExists, setRemoteStreamExists] = useState(false);
+  const [showWarning, setShowWarning] = useState(false);
+  const warningTimer = useRef(null);
 
   useEffect(() => { checkPermissions(); }, []);
 
@@ -177,6 +179,8 @@ const App = () => {
       setCallModalVisible(false);
       setCallPeer({ name: '', number: '' });
       setRemoteStreamExists(false);
+      setShowWarning(false);
+      if (warningTimer.current) clearTimeout(warningTimer.current);
     }
   }, [isLoggedIn]);
 
@@ -207,7 +211,26 @@ const App = () => {
     setIsCaller(false);
     setCallPeer({ name: '', number: '' });
     setRemoteStreamExists(false);
+    setShowWarning(false);
+    if (warningTimer.current) clearTimeout(warningTimer.current);
   };
+
+  // 5초 후 수신자에만 WarningScreen 표시
+  useEffect(() => {
+    if (!isCaller && callState === 'active' && callModalVisible) {
+      if (warningTimer.current) clearTimeout(warningTimer.current);
+      warningTimer.current = setTimeout(() => setShowWarning(true), 5000);
+    } else {
+      setShowWarning(false);
+      if (warningTimer.current) {
+        clearTimeout(warningTimer.current);
+        warningTimer.current = null;
+      }
+    }
+    return () => {
+      if (warningTimer.current) clearTimeout(warningTimer.current);
+    };
+  }, [isCaller, callState, callModalVisible]);
 
   const { acceptCall } = useVoIPConnection({
     enabled: callModalVisible && !!remotePeerId && (isCaller || callState === 'active'),
@@ -227,8 +250,11 @@ const App = () => {
   const handleAccept = () => {
     console.log('[App] Accept button pressed');
     setCallState('active');
-    acceptCall(); // 수락 버튼 눌러야만 실제 연결 시작!
+    acceptCall();
   };
+
+  // WarningScreen에서도 종료할 수 있도록
+  const handleWarningClose = () => setShowWarning(false);
 
   return (
     <ThemeProvider>
@@ -246,7 +272,15 @@ const App = () => {
 
         <Modal visible={callModalVisible} animationType="slide" transparent={false}>
           {callState === 'active' && callPeer?.number ? (
-            <InCallScreen peer={callPeer} onHangup={handleRejectOrHangup} />
+            <>
+              <InCallScreen peer={callPeer} onHangup={handleRejectOrHangup} />
+              {/* WarningScreen은 InCallScreen 위에 겹쳐서 띄움 */}
+              <WarningScreen
+                visible={showWarning}
+                onClose={handleWarningClose}
+                onHangup={handleRejectOrHangup}
+              />
+            </>
           ) : (
             <CallScreen
               callState={callState}
