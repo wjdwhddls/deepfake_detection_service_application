@@ -1,4 +1,5 @@
-import { useRef, useEffect } from 'react';
+// src/services/useVoIPConnection.js
+import { useRef, useEffect, useState } from 'react';
 import {
   RTCPeerConnection,
   RTCSessionDescription,
@@ -23,211 +24,181 @@ export default function useVoIPConnection({
   const pc = useRef(null);
   const localStreamRef = useRef(null);
   const remoteMediaStream = useRef(new MediaStream());
-  const signalHandlers = useRef({});
+  const pendingCandidates = useRef([]);
+  const [pendingOffer, setPendingOffer] = useState(null);
 
+  // 소켓 신호 핸들러 등록
   useEffect(() => {
-    let isClosed = false;
-    let retryTimer = null;
+    if (!socket) return;
 
-    const registerSocketHandlers = () => {
-      signalHandlers.current.handleOffer = async ({ offer, from }) => {
-        if (isClosed || !pc.current) return;
-        console.log('[VoIP] 📩 Received offer from', from, 'with offer:', offer);
+    const handleOffer = async ({ offer, from }) => {
+      console.log('[VoIP] 📩 Received offer from', from);
+      setPendingOffer({ offer, from });
+    };
 
-        try {
-          await pc.current.setRemoteDescription(new RTCSessionDescription(offer));
-          console.log('[VoIP] ✅ Set remote description (offer)');
+    const handleAnswer = async ({ answer }) => {
+      if (!pc.current) return;
+      console.log('[VoIP] 📩 Received answer');
 
-          const answer = await pc.current.createAnswer();
-          await pc.current.setLocalDescription(answer);
-          console.log('[VoIP] 📤 Created answer:', answer);
+      try {
+        await pc.current.setRemoteDescription(new RTCSessionDescription(answer));
+        console.log('[VoIP] ✅ Set remote description (answer)');
+      } catch (err) {
+        console.error('[VoIP] ❌ Failed to handle answer:', err);
+      }
+    };
 
-          socket.emit('answer', { answer, to: from, from: socket.id });
-          console.log('[VoIP] 📤 Sent answer to', from);
-        } catch (err) {
-          console.error('[VoIP] ❌ Failed to handle offer:', err);
-        }
-      };
-
-      signalHandlers.current.handleAnswer = async ({ answer }) => {
-        if (isClosed || !pc.current) return;
-        console.log('[VoIP] 📩 Received answer:', answer);
-
-        try {
-          await pc.current.setRemoteDescription(new RTCSessionDescription(answer));
-          console.log('[VoIP] ✅ Set remote description (answer)');
-        } catch (err) {
-          console.error('[VoIP] ❌ Failed to handle answer:', err);
-        }
-      };
-
-      signalHandlers.current.handleIce = async ({ candidate }) => {
-        if (candidate && pc.current) {
-          console.log('[VoIP] 📥 Received ICE candidate:', candidate);
+    const handleIce = async ({ candidate }) => {
+      if (candidate) {
+        if (pc.current?.remoteDescription) {
           try {
             await pc.current.addIceCandidate(candidate);
-            console.log('[VoIP] ➕ Added remote ICE candidate');
+            console.log('[VoIP] 📥 ICE candidate added immediately');
           } catch (e) {
             console.error('[VoIP] ❌ Error adding ICE candidate:', e);
           }
+        } else {
+          pendingCandidates.current.push(candidate);
+          console.log('[VoIP] 📥 ICE candidate queued (no remote description yet)');
+        }
+      }
+    };
+
+    socket.off('offer').on('offer', handleOffer);
+    socket.off('answer').on('answer', handleAnswer);
+    socket.off('ice').on('ice', handleIce);
+
+    console.log('[VoIP] 📱 Signal handlers registered (always-on)');
+
+    return () => {
+      socket.off('offer', handleOffer);
+      socket.off('answer', handleAnswer);
+      socket.off('ice', handleIce);
+    };
+  }, [socket]);
+
+  const initConnection = async (caller) => {
+    if (!socket?.connected) return;
+
+    console.log('[VoIP] 🔧 Initializing VoIP connection...');
+    console.log('[VoIP] ➔ isCaller:', caller);
+
+    try {
+      const stream = await mediaDevices.getUserMedia({ audio: true });
+      console.log('[VoIP] 🎧 Local media stream acquired');
+      localStreamRef.current = stream;
+
+      await sleep(300);
+      pc.current = new RTCPeerConnection(peerConfig);
+      console.log('[VoIP] 🧑‍💻 Created RTCPeerConnection');
+
+      stream.getTracks().forEach((track) => {
+        pc.current.addTrack(track, stream);
+      });
+
+      pc.current.oniceconnectionstatechange = () => {
+        const state = pc.current?.iceConnectionState;
+        console.log('[VoIP] 🧊 ICE state:', state);
+        if (['failed', 'disconnected', 'closed'].includes(state)) {
+          if (onHangup) onHangup('ice_disconnected');
         }
       };
 
-      socket?.off('offer').on('offer', signalHandlers.current.handleOffer);
-      socket?.off('answer').on('answer', signalHandlers.current.handleAnswer);
-      socket?.off('ice').on('ice', signalHandlers.current.handleIce);
-
-      console.log('[VoIP] 📱 Signal handlers registered');
-    };
-
-    const initConnection = async () => {
-      if (!enabled || !socket?.connected) {
-        console.warn('[VoIP] Skipping setup (enabled/socket):', {
-          enabled,
-          socketConnected: socket?.connected,
-        });
-        return;
-      }
-
-      if (!remotePeerId) {
-        console.warn('[VoIP] Waiting for remotePeerId...');
-        retryTimer = setInterval(() => {
-          if (remotePeerId && !isClosed && socket?.connected) {
-            console.log('[VoIP] ✅ remotePeerId acquired, re-initializing...');
-            clearInterval(retryTimer);
-            initConnection(); // 재시도
-          }
-        }, 200);
-        return;
-      }
-
-      console.log('[VoIP] 🔧 Initializing VoIP connection...');
-      console.log('[VoIP] ➔ isCaller:', isCaller);
-
-      try {
-        registerSocketHandlers();
-
-        let stream;
-        try {
-          stream = await mediaDevices.getUserMedia({ audio: true });
-          console.log('[VoIP] 🎧 Local media stream acquired:', stream.toURL?.() ?? stream);
-        } catch (err) {
-          console.error('[VoIP] ❌ Error getting local media stream:', err);
-          if (onHangup) onHangup('media_error', err?.message || err);
-          return;
+      pc.current.ontrack = (event) => {
+        const stream = event.streams[0];
+        if (stream) {
+          stream.getTracks().forEach((track) => remoteMediaStream.current.addTrack(track));
+          if (onRemoteStream) onRemoteStream(stream);
         }
+      };
 
-        localStreamRef.current = stream;
-        await sleep(300);
-
-        pc.current = new RTCPeerConnection(peerConfig);
-        console.log('[VoIP] 🧑‍💻 Created RTCPeerConnection');
-
-        stream.getTracks().forEach((track) => {
-          try {
-            pc.current.addTrack(track, stream);
-            console.log(`[VoIP] ➕ Added local track (${track.kind})`);
-          } catch (e) {
-            console.error('[VoIP] ❌ Failed to add local track:', e);
-          }
-        });
-
-        pc.current.oniceconnectionstatechange = () => {
-          const state = pc.current?.iceConnectionState;
-          console.log('[VoIP] 🧊 ICE connection state:', state);
-          if (['failed', 'disconnected', 'closed'].includes(state)) {
-            if (!isClosed && onHangup) {
-              onHangup('ice_disconnected');
-            }
-          }
-        };
-
-        pc.current.ontrack = (event) => {
-          if (isClosed) return;
-          console.log('[VoIP] 📱 Received remote track:', event.track.kind);
-
-          const stream = event.streams[0];
-          if (stream) {
-            stream.getTracks().forEach((track) => {
-              remoteMediaStream.current.addTrack(track);
-            });
-            if (onRemoteStream) {
-              console.log('[VoIP] 🎧 Calling onRemoteStream with stream:', stream);
-              onRemoteStream(stream);
-            }
-          } else {
-            console.warn('[VoIP] ⚠️ No remote stream found in event.streams');
-          }
-        };
-
-        pc.current.onicecandidate = (e) => {
-          if (e.candidate && socket?.connected && remotePeerId) {
-            console.log('[VoIP] ❄️ Sending ICE candidate:', e.candidate);
-            socket.emit('ice', {
-              candidate: e.candidate,
-              to: remotePeerId,
-              from: socket.id,
-            });
-          } else {
-            console.log('[VoIP] ✅ ICE candidate gathering complete or no candidate');
-          }
-        };
-
-        if (isCaller) {
-          try {
-            console.log('[VoIP] 📤 Creating offer...');
-            const offer = await pc.current.createOffer();
-            await pc.current.setLocalDescription(offer);
-            console.log('[VoIP] ☎️ Created offer:', offer);
-
-            socket.emit('offer', {
-              offer,
-              to: remotePeerId,
-              from: socket.id,
-            });
-            console.log('[VoIP] ☎️ Sent offer to', remotePeerId);
-          } catch (err) {
-            console.error('[VoIP] ❌ Failed to create/send offer:', err);
-          }
+      pc.current.onicecandidate = (e) => {
+        if (e.candidate) {
+          socket.emit('ice', {
+            candidate: e.candidate,
+            to: remotePeerId,
+            from: socket.id,
+          });
         }
-      } catch (err) {
-        console.error('[VoIP] ❌ Error during initConnection:', err);
-        if (onHangup) onHangup('init_error', err?.message || err);
-      }
-    };
+      };
 
-    initConnection();
+      if (caller) {
+        const offer = await pc.current.createOffer();
+        await pc.current.setLocalDescription(offer);
+        console.log('[VoIP] ☎️ Created and sent offer');
+        socket.emit('offer', {
+          offer,
+          to: remotePeerId,
+          from: socket.id,
+        });
+      }
+    } catch (err) {
+      console.error('[VoIP] ❌ Error during initConnection:', err);
+      if (onHangup) onHangup('init_error', err?.message || err);
+    }
+  };
+
+  // 수락 버튼 누를 때 호출되는 함수
+  const acceptCall = async () => {
+    if (!pendingOffer) return;
+    console.log('[VoIP] ✅ Accepting call...');
+
+    await initConnection(false);
+
+    try {
+      await pc.current.setRemoteDescription(new RTCSessionDescription(pendingOffer.offer));
+      console.log('[VoIP] ✅ Set remote description (offer)');
+
+      for (const c of pendingCandidates.current) {
+        await pc.current.addIceCandidate(c);
+      }
+      pendingCandidates.current = [];
+
+      const answer = await pc.current.createAnswer();
+      await pc.current.setLocalDescription(answer);
+      console.log('[VoIP] 📤 Created and sent answer');
+
+      socket.emit('answer', {
+        answer,
+        to: pendingOffer.from,
+        from: socket.id,
+      });
+
+      setPendingOffer(null);
+    } catch (err) {
+      console.error('[VoIP] ❌ Failed to accept call:', err);
+      if (onHangup) onHangup('accept_error', err?.message || err);
+    }
+  };
+
+  useEffect(() => {
+    if (!enabled) {
+      console.warn('[VoIP] Skipping setup (enabled/socket):', {
+        enabled,
+        socketConnected: socket?.connected,
+      });
+      return;
+    }
+
+    if (isCaller) {
+      initConnection(true);
+    }
 
     return () => {
-      isClosed = true;
-      clearInterval(retryTimer);
       console.log('[VoIP] 🔧 Cleaning up connection');
-
-      socket?.off('offer', signalHandlers.current.handleOffer);
-      socket?.off('answer', signalHandlers.current.handleAnswer);
-      socket?.off('ice', signalHandlers.current.handleIce);
-
       if (pc.current) {
-        try {
-          pc.current.close();
-          console.log('[VoIP] 🔌 Closed RTCPeerConnection');
-        } catch (e) {
-          console.warn('[VoIP] ⚠️ Error closing RTCPeerConnection:', e);
-        }
+        pc.current.close();
         pc.current = null;
       }
-
       if (localStreamRef.current) {
-        try {
-          localStreamRef.current.getTracks().forEach((track) => track.stop());
-          console.log('[VoIP] 🎧 Stopped local stream tracks');
-        } catch (e) {
-          console.warn('[VoIP] ⚠️ Error stopping tracks:', e);
-        }
+        localStreamRef.current.getTracks().forEach((track) => track.stop());
         localStreamRef.current = null;
       }
-
       remoteMediaStream.current = new MediaStream();
+      pendingCandidates.current = [];
+      setPendingOffer(null);
     };
-  }, [enabled, remotePeerId, socket, isCaller, onRemoteStream, onHangup]);
+  }, [enabled, remotePeerId, socket, isCaller]);
+
+  return { acceptCall };
 }

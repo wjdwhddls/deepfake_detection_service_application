@@ -138,7 +138,7 @@ const App = () => {
   const onLoginSuccess = (phoneNumber) => {
     setUserPhoneNumber(phoneNumber);
     setIsLoggedIn(true);
-    const webSocket = io('http://172.30.1.96:3000');
+    const webSocket = io('http://192.168.219.222:3000');
 
     webSocket.on('connect', () => {
       console.log('[Socket] Connected');
@@ -157,7 +157,6 @@ const App = () => {
     webSocket.on('call-ack', ({ toSocketId }) => {
       console.log('[Socket] Received call-ack with toSocketId:', toSocketId);
       setRemotePeerId(toSocketId);
-      setCallState('connecting');
     });
 
     webSocket.on('call-ended', () => {
@@ -198,8 +197,6 @@ const App = () => {
     }
   };
 
-  const handleAccept = () => setCallState('connecting');
-
   const handleRejectOrHangup = () => {
     if (socket && remotePeerId) {
       socket.emit('hangup', { to: remotePeerId, from: userPhoneNumber });
@@ -212,8 +209,8 @@ const App = () => {
     setRemoteStreamExists(false);
   };
 
-  useVoIPConnection({
-    enabled: callModalVisible && ['connecting', 'active', 'incoming'].includes(callState) && !!remotePeerId,
+  const { acceptCall } = useVoIPConnection({
+    enabled: callModalVisible && !!remotePeerId && (isCaller || callState === 'active'),
     remotePeerId,
     socket,
     isCaller,
@@ -226,6 +223,12 @@ const App = () => {
     },
     onHangup: handleRejectOrHangup,
   });
+
+  const handleAccept = () => {
+    console.log('[App] Accept button pressed');
+    setCallState('active');
+    acceptCall(); // 수락 버튼 눌러야만 실제 연결 시작!
+  };
 
   return (
     <ThemeProvider>
