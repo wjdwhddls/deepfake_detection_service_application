@@ -42,7 +42,6 @@ const LoginScreen = ({ setIsLoggedIn,  onLoginSuccess }) => {
         await AsyncStorage.setItem('token', token); // 토큰 저장
         setIsLoggedIn(true);
         onLoginSuccess(response.data.data.phoneNumber);
-        navigation.navigate('Home');
         Alert.alert('로그인 성공', '환영합니다!');
       } else {
         const msg = response.data?.message || 
