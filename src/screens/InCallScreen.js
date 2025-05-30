@@ -10,11 +10,11 @@ export default function InCallScreen({ peer, onHangup }) {
   const [speakerOn, setSpeakerOn] = useState(false);
 
   useEffect(() => {
-    InCallManager.start({ media: 'audio' });
+    // InCallManager.start({ media: 'audio' }); // ❌ 진동/벨소리 시작 제거
     const timer = setInterval(() => setSeconds((s) => s + 1), 1000);
     return () => {
       clearInterval(timer);
-      InCallManager.stop();
+      // InCallManager.stop(); // ❌ 종료 처리 제거
     };
   }, []);
 
@@ -67,12 +67,40 @@ export default function InCallScreen({ peer, onHangup }) {
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', padding: 24,
+    flex: 1,
+    backgroundColor: '#000',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
   },
-  name: { fontSize: 24, color: '#fff', marginBottom: 6, },
-  status: { fontSize: 20, color: '#aaa', marginBottom: 40, },
-  buttonRow: { flexDirection: 'row', justifyContent: 'space-around', width: '90%', alignItems: 'center', },
-  button: { alignItems: 'center', },
-  hangupButton: { backgroundColor: '#d9534f', borderRadius: 50, padding: 18, marginHorizontal: 20, },
-  label: { color: '#ccc', fontSize: 14, marginTop: 6, },
+  name: {
+    fontSize: 24,
+    color: '#fff',
+    marginBottom: 6,
+  },
+  status: {
+    fontSize: 20,
+    color: '#aaa',
+    marginBottom: 40,
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '90%',
+    alignItems: 'center',
+  },
+  button: {
+    alignItems: 'center',
+  },
+  hangupButton: {
+    backgroundColor: '#d9534f',
+    borderRadius: 50,
+    padding: 18,
+    marginHorizontal: 20,
+  },
+  label: {
+    color: '#ccc',
+    fontSize: 14,
+    marginTop: 6,
+  },
 });
