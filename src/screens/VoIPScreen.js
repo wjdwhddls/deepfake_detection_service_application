@@ -1,7 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Dimensions } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  SafeAreaView,
+  Dimensions,
+} from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
+import { useTheme } from '../contexts/ThemeContext';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const SCREEN_HEIGHT = Dimensions.get('window').height;
@@ -43,6 +51,8 @@ export default function VoIPScreen({ socket, userPhoneNumber, onStartCall }) {
   const navigation = useNavigation();
   const isFocused = useIsFocused();
   const [dialedNumber, setDialedNumber] = useState('');
+  const { isLightMode } = useTheme();
+  const styles = getStyles(isLightMode);
 
   useEffect(() => {
     if (isFocused) {
@@ -65,10 +75,6 @@ export default function VoIPScreen({ socket, userPhoneNumber, onStartCall }) {
     const formattedNumber = formatPhoneNumber(dialedNumber);
     if (formattedNumber) {
       onStartCall(formattedNumber, { name: '' });
-      navigation.navigate('CallScreen', {
-        peer: { name: '', number: formattedNumber },
-        callState: 'outgoing',
-      });
     } else {
       console.warn('Please enter a valid number to call.');
     }
@@ -115,10 +121,10 @@ export default function VoIPScreen({ socket, userPhoneNumber, onStartCall }) {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (isLightMode) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: isLightMode ? '#FFFFFF' : '#000000',
     alignItems: 'center',
     justifyContent: 'flex-start',
   },
@@ -129,7 +135,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: SCREEN_HEIGHT * 0.035,
     fontWeight: 'bold',
-    color: '#1976D2',
+    color: isLightMode ? '#1976D2' : '#90CAF9',
   },
   dialedNumberContainer: {
     marginTop: SCREEN_HEIGHT * 0.02,
@@ -137,7 +143,7 @@ const styles = StyleSheet.create({
   },
   dialedNumber: {
     fontSize: SCREEN_HEIGHT * 0.03,
-    color: '#000000',
+    color: isLightMode ? '#000000' : '#FFFFFF',
     paddingBottom: 10,
     borderBottomWidth: 2,
     borderBottomColor: '#6A1B9A',
@@ -160,18 +166,18 @@ const styles = StyleSheet.create({
     width: BUTTON_SIZE,
     height: BUTTON_SIZE,
     borderRadius: BUTTON_SIZE / 2,
-    backgroundColor: '#E0E0E0',
+    backgroundColor: isLightMode ? '#E0E0E0' : '#424242',
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 2,
   },
   keypadButtonText: {
     fontSize: SCREEN_HEIGHT * 0.035,
-    color: '#000000',
+    color: isLightMode ? '#000000' : '#FFFFFF',
   },
   keypadLabel: {
     fontSize: SCREEN_HEIGHT * 0.015,
-    color: '#000000',
+    color: isLightMode ? '#000000' : '#FFFFFF',
   },
   buttonContainer: {
     flexDirection: 'row',
