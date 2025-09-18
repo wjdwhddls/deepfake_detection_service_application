@@ -7,27 +7,6 @@ apply plugin: "com.facebook.react"
  * By default you don't need to apply any configuration, just uncomment the lines you need.
  */
 react {
-    /* Folders */
-    // root = file("../../")
-    // reactNativeDir = file("../../node_modules/react-native")
-    // codegenDir = file("../../node_modules/@react-native/codegen")
-    // cliFile = file("../../node_modules/react-native/cli.js")
-
-    /* Variants */
-    // debuggableVariants = ["liteDebug", "prodDebug"]
-
-    /* Bundling */
-    // nodeExecutableAndArgs = ["node"]
-    // bundleCommand = "ram-bundle"
-    // bundleConfig = file(../rn-cli.config.js)
-    // bundleAssetName = "MyApplication.android.bundle"
-    // entryFile = file("../js/MyApplication.android.js")
-    // extraPackagerArgs = []
-
-    /* Hermes Commands */
-    // hermesCommand = "$rootDir/my-custom-hermesc/bin/hermesc"
-    // hermesFlags = ["-O", "-output-source-map"]
-
     /* Autolinking */
     autolinkLibrariesWithApp()
 }
@@ -79,6 +58,15 @@ dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
     implementation project(':react-native-webrtc')
+
+    // ---- On-device inference (추가) ----
+    implementation "org.tensorflow:tensorflow-lite:2.14.0"
+    implementation "org.tensorflow:tensorflow-lite-support:0.4.4"
+    implementation "org.tensorflow:tensorflow-lite-gpu:2.14.0"      // 선택: GPU delegate
+    // Select TF Ops가 필요하면 아래 주석 해제
+    // implementation "org.tensorflow:tensorflow-lite-select-tf-ops:2.14.0"
+    implementation "be.tarsos.dsp:core:2.5"            // MFCC/FFT
+
     if (hermesEnabled.toBoolean()) {
         implementation("com.facebook.react:hermes-android")
     } else {

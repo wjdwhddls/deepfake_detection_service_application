@@ -140,7 +140,7 @@ const App = () => {
   const onLoginSuccess = (phoneNumber) => {
     setUserPhoneNumber(phoneNumber);
     setIsLoggedIn(true);
-    const webSocket = io('http://192.168.219.222:3000');
+    const webSocket = io('http://10.0.2.2:3000');
 
     webSocket.on('connect', () => {
       console.log('[Socket] Connected');
