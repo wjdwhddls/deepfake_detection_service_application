@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,12 +9,14 @@ import {
   Platform,
   Image,
   NativeModules,
+  BackHandler,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { pick } from '@react-native-documents/picker';
 import { request, PERMISSIONS, RESULTS } from 'react-native-permissions';
 import { useTheme } from '../contexts/ThemeContext';
 import LogoImage from '../assets/Detection.png';
+import RNFS from 'react-native-fs'; // ✅ 새로 추가: 캐시로 복사해 매번 새로운 경로 사용
 
 const HomeScreen = () => {
   const [resultData, setResultData] = useState(null);
@@ -26,18 +28,62 @@ const HomeScreen = () => {
   // 네이티브 모듈
   const { DeepfakeDetector } = NativeModules;
 
-  // 앱 시작 시 모델 초기화
+  // ✅ 모델 초기화: 1회만, 중복 방지
+  const initOnceRef = useRef(false);
   useEffect(() => {
-    if (!DeepfakeDetector || !DeepfakeDetector.initModel) {
-      // iOS 등에서 모듈이 없을 경우
-      console.warn('DeepfakeDetector native module not found.');
-      return;
-    }
-    DeepfakeDetector.initModel().catch((e) => {
-      console.warn('initModel failed:', e);
-      Alert.alert('오류', '모델 초기화에 실패했습니다.');
-    });
-  }, [DeepfakeDetector]);
+    let mounted = true;
+
+    const boot = async () => {
+      if (initOnceRef.current) return; // 이미 초기화했으면 스킵
+      if (!DeepfakeDetector?.initModel) {
+        console.warn('DeepfakeDetector native module not found.');
+        return;
+      }
+      try {
+        await DeepfakeDetector.initModel();
+        if (mounted) initOnceRef.current = true;
+      } catch (e) {
+        console.warn('initModel failed:', e);
+        Alert.alert('오류', '모델 초기화에 실패했습니다.');
+      }
+    };
+
+    boot();
+    return () => { mounted = false; };
+  }, []); // 👈 의존성 제거(재초기화 방지)
+
+  // ✅ 화면 포커스될 때마다 상태/세션 초기화
+  useFocusEffect(
+    React.useCallback(() => {
+      // UI 상태 초기화
+      setResultData(null);
+      setLoading(false);
+      setShowUploadButton(false);
+
+      // 네이티브 세션 초기화(있으면)
+      try {
+        if (DeepfakeDetector?.resetSession) {
+          DeepfakeDetector.resetSession();
+        } else if (DeepfakeDetector?.clear) {
+          DeepfakeDetector.clear();
+        }
+      } catch (e) {
+        console.log('reset session skipped:', e);
+      }
+
+      const onBack = () => {
+        // 뒤로가기 시 진행중 상태 정리
+        setLoading(false);
+        setResultData(null);
+        return false; // 기본 뒤로가기 동작 유지
+      };
+      BackHandler.addEventListener('hardwareBackPress', onBack);
+
+      return () => {
+        BackHandler.removeEventListener('hardwareBackPress', onBack);
+      };
+    }, [])
+  );
 
   const handleDetect = () => {
     setShowUploadButton(!showUploadButton);
@@ -82,8 +128,14 @@ const HomeScreen = () => {
         return;
       }
 
-      // 🔍 온디바이스 추론
-      const res = await DeepfakeDetector.detectFromFile(pickResult.uri);
+      // ✅ 같은 URI 캐시 오판정 방지: 매번 새로운 캐시 경로로 복사 후 전달
+      const ext = (pickResult?.name || '').toLowerCase().endsWith('.wav') ? '.wav' : '.wav';
+      const cachedPath = `${RNFS.CachesDirectoryPath}/upload-${Date.now()}${ext}`;
+      await RNFS.copyFile(pickResult.uri, cachedPath);
+
+      // 🔍 온디바이스 추론(파일 스킴 포함)
+      const fileUri = Platform.OS === 'android' ? `file://${cachedPath}` : cachedPath;
+      const res = await DeepfakeDetector.detectFromFile(fileUri);
       // res: { prob_real: number, result: '진짜 음성' | '가짜 음성' }
       setResultData(res);
     } catch (error) {
@@ -91,11 +143,16 @@ const HomeScreen = () => {
       Alert.alert('오류', '분석 중 문제가 발생했습니다.');
     } finally {
       setLoading(false);
+      // 업로드 버튼은 계속 보이게 유지 → 바로 다음 업로드 가능
+      setShowUploadButton(true);
     }
   };
 
   const handleReset = () => {
     setResultData(null);
+    setLoading(false);
+    setShowUploadButton(true); // 결과 닫고 곧바로 새 업로드 유도
+    try { DeepfakeDetector?.resetSession?.(); } catch {}
   };
 
   const handleDetailView = () => {
