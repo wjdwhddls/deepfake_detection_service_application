@@ -16,7 +16,7 @@ const LoginScreen = ({ setIsLoggedIn,  onLoginSuccess }) => {
     console.log('로그인 요청 값:', { user_id: trimmedEmail, user_pw: trimmedPassword });
 
     try {
-      const response = await axios.post('http://10.0.2.2:3000/api/auth/signin', {
+      const response = await axios.post('http://ec2-43-203-141-45.ap-northeast-2.compute.amazonaws.com/api/auth/signin', {
         user_id: trimmedEmail,
         user_pw: trimmedPassword,
       }, {

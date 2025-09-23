@@ -44,8 +44,10 @@ const SignUpScreen = ({ navigation }) => {
         console.log("전송할 데이터:", requestData); // Log the request data
         
         try {
-            // API 요청 (URL을 올바르게 설정)
-            const response = await axios.post('http://10.0.2.2:3000/api/users/', requestData);
+            // ✅ 서버 주소만 EC2 퍼블릭 DNS로 변경
+            const response = await axios.post('http://ec2-43-203-141-45.ap-northeast-2.compute.amazonaws.com/api/users/',
+                requestData
+            );
 
             console.log("서버 응답:", response.data); // 서버 응답 확인
 

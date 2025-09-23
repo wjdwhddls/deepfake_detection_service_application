@@ -31,7 +31,7 @@ const CreatePostScreen = ({ navigation }) => {
       if (!token) throw new Error('로그인이 필요합니다.');
 
       await axios.post(
-        'http://172.30.1.63:3000/api/dashboard',
+        'http://ec2-43-203-141-45.ap-northeast-2.compute.amazonaws.com/api/dashboard',
         {
           title,
           text,

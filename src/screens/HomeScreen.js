@@ -77,10 +77,12 @@ const HomeScreen = () => {
         setResultData(null);
         return false; // 기본 뒤로가기 동작 유지
       };
-      BackHandler.addEventListener('hardwareBackPress', onBack);
+
+      // 🔁 RN 0.7x: addEventListener가 subscription을 반환 → cleanup에서 remove() 호출
+      const backSub = BackHandler.addEventListener('hardwareBackPress', onBack);
 
       return () => {
-        BackHandler.removeEventListener('hardwareBackPress', onBack);
+        backSub?.remove();
       };
     }, [])
   );

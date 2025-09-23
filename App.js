@@ -140,7 +140,8 @@ const App = () => {
   const onLoginSuccess = (phoneNumber) => {
     setUserPhoneNumber(phoneNumber);
     setIsLoggedIn(true);
-    const webSocket = io('http://10.0.2.2:3000');
+    // ✅ 주소만 EC2 퍼블릭 DNS로 변경
+    const webSocket = io('http://ec2-43-203-141-45.ap-northeast-2.compute.amazonaws.com');
 
     webSocket.on('connect', () => {
       console.log('[Socket] Connected');

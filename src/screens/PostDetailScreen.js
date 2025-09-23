@@ -38,7 +38,7 @@ const PostDetailScreen = () => {
       }
 
       const response = await axios.get(
-        `http://172.30.1.63:3000/api/dashboard/${id}/detail`,
+        `http://ec2-43-203-141-45.ap-northeast-2.compute.amazonaws.com/api/dashboard/${id}/detail`,
         {
           headers: {
             Authorization: `Bearer ${token}`, // Bearer 토큰 사용
