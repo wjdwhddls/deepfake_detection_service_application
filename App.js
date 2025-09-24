@@ -1,14 +1,23 @@
 // App.js
 import React, { useState, useEffect, useRef } from 'react';
-import { Modal, NativeModules, NativeEventEmitter } from 'react-native';
+import {
+  Modal,
+  TouchableOpacity,
+  View,
+  StyleSheet,
+  NativeModules,
+  NativeEventEmitter,
+} from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { createStackNavigator } from '@react-navigation/stack';
-import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
+import LinearGradient from 'react-native-linear-gradient';
 import io from 'socket.io-client';
 
+import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
 import { checkPermissions } from './src/services/PhoneService';
+
 import HomeScreen from './src/screens/HomeScreen';
 import DashBoardScreen from './src/screens/DashBoardScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
@@ -36,6 +45,20 @@ const deepfakeEvents = DeepfakeDetector ? new NativeEventEmitter(DeepfakeDetecto
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
+/* ===== Palette (Design) ===== */
+const PALETTE = {
+  g1: '#20B2F3',
+  g2: '#5E73F7',
+  g3: '#0F1730',
+  surface: 'rgba(16,24,48,0.92)',
+  surface2: 'rgba(31,54,108,0.92)',
+  outline: 'rgba(255,255,255,0.12)',
+  active: '#4FB2FF',
+  inactive: 'rgba(255,255,255,0.60)',
+  white: '#FFFFFF',
+};
+
+/* ===== Stacks ===== */
 const DashBoardStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="DashBoardMain" component={DashBoardScreen} />
@@ -79,28 +102,166 @@ const VoIPStack = ({ socket, userPhoneNumber, onStartCall }) => (
   </Stack.Navigator>
 );
 
+/* ===== FAB (Center) ===== */
+const tabStyles = StyleSheet.create({
+  fabWrap: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+    top: -30,
+  },
+  fabShadow: {
+    width: 66,
+    height: 66,
+    borderRadius: 33,
+    shadowColor: '#000',
+    shadowOpacity: 0.28,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 16,
+    borderWidth: 1,
+    borderColor: PALETTE.outline,
+    overflow: 'hidden',
+  },
+  fab: {
+    flex: 1,
+    borderRadius: 33,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});
+
+const CentralTabBarButton = ({ children, onPress }) => (
+  <View style={tabStyles.fabWrap}>
+    <TouchableOpacity
+      activeOpacity={0.9}
+      onPress={onPress}
+      style={tabStyles.fabShadow}
+      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+    >
+      <LinearGradient
+        colors={[PALETTE.g1, PALETTE.g2]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={tabStyles.fab}
+      >
+        {children}
+      </LinearGradient>
+    </TouchableOpacity>
+  </View>
+);
+
+const Noop = () => null;
+
+/* ===== Tabs (with design) ===== */
 const MainTabNavigator = ({ socket, userPhoneNumber, setIsLoggedIn, onStartCall }) => {
-  const { isLightMode } = useTheme();
+  useTheme(); // 필요시 테마값 사용 가능
+
   return (
     <Tab.Navigator
-      screenOptions={({ route }) => ({
-        tabBarIcon: ({ focused, color, size }) => {
-          let iconName;
+      screenOptions={({ route, navigation }) => ({
+        headerShown: false,
+        tabBarHideOnKeyboard: true,
+        sceneContainerStyle: { backgroundColor: PALETTE.g3 },
+
+        tabBarStyle: {
+          position: 'absolute',
+          left: 12,
+          right: 12,
+          bottom: 12,
+          height: 70,
+          paddingBottom: 8,
+          paddingTop: 6,
+          borderTopWidth: 0,
+          backgroundColor: 'transparent',
+          elevation: 16,
+          shadowColor: '#000',
+          shadowOpacity: 0.28,
+          shadowRadius: 18,
+          shadowOffset: { width: 0, height: 10 },
+          borderRadius: 18,
+          overflow: 'visible', // FAB 안 잘리게
+        },
+
+        tabBarBackground: () => (
+          <View style={StyleSheet.absoluteFill}>
+            <View
+              style={{
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                top: 0,
+                bottom: 0,
+                borderRadius: 18,
+                overflow: 'hidden',
+              }}
+            >
+              <LinearGradient
+                colors={[PALETTE.surface, PALETTE.surface2]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={StyleSheet.absoluteFill}
+              />
+            </View>
+            <View
+              style={{
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                top: 0,
+                height: StyleSheet.hairlineWidth,
+                backgroundColor: PALETTE.outline,
+                borderTopLeftRadius: 18,
+                borderTopRightRadius: 18,
+              }}
+            />
+          </View>
+        ),
+
+        tabBarActiveTintColor: PALETTE.active,
+        tabBarInactiveTintColor: PALETTE.inactive,
+        tabBarLabelStyle: { fontSize: 12, fontWeight: '700' },
+
+        tabBarIcon: ({ focused, color }) => {
+          if (route.name === 'Action') return null;
+          let iconName = 'home-outline';
           if (route.name === 'Home') iconName = focused ? 'home' : 'home-outline';
           else if (route.name === 'VoIP') iconName = focused ? 'call' : 'call-outline';
           else if (route.name === 'DashBoard') iconName = focused ? 'stats-chart' : 'stats-chart-outline';
           else if (route.name === 'Profile') iconName = focused ? 'person' : 'person-outline';
-          return <Icon name={iconName} size={size} color={color} />;
+          return <Icon name={iconName} size={22} color={color} />;
         },
-        tabBarActiveTintColor: isLightMode ? '#007AFF' : '#FFCC00',
-        tabBarInactiveTintColor: isLightMode ? '#8e8e93' : '#BBBBBB',
-        headerShown: false,
+
+        tabBarButton: (props) => {
+          if (route.name !== 'Action') return <TouchableOpacity {...props} />;
+          return (
+            <CentralTabBarButton onPress={() => navigation.navigate('Home')}>
+              <Icon name="mic" size={28} color={PALETTE.white} />
+            </CentralTabBarButton>
+          );
+        },
       })}
     >
+      {/* 좌측 2개 */}
       <Tab.Screen name="Home" component={DetectStack} />
       <Tab.Screen name="VoIP">
         {() => <VoIPStack socket={socket} userPhoneNumber={userPhoneNumber} onStartCall={onStartCall} />}
       </Tab.Screen>
+
+      {/* 중앙 FAB(홈으로 이동) */}
+      <Tab.Screen
+        name="Action"
+        component={Noop}
+        options={{ tabBarLabel: '' }}
+        listeners={({ navigation }) => ({
+          tabPress: (e) => {
+            e.preventDefault();
+            navigation.navigate('Home');
+          },
+        })}
+      />
+
+      {/* 우측 2개 */}
       <Tab.Screen name="DashBoard" component={DashBoardStack} />
       <Tab.Screen name="Profile">
         {() => <ProfileStack setIsLoggedIn={setIsLoggedIn} />}
@@ -109,6 +270,7 @@ const MainTabNavigator = ({ socket, userPhoneNumber, setIsLoggedIn, onStartCall 
   );
 };
 
+/* ===== Auth Stack ===== */
 const AuthStack = ({ setIsLoggedIn, onLoginSuccess }) => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="Login">
@@ -126,6 +288,7 @@ const AuthStack = ({ setIsLoggedIn, onLoginSuccess }) => (
   </Stack.Navigator>
 );
 
+/* ===== App (logic unchanged) ===== */
 const App = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [socket, setSocket] = useState(null);
@@ -173,14 +336,6 @@ const App = () => {
       if (p.decision === 'fake') {
         fakeStreakRef.current += 1;
         realStreakRef.current = 0;
-
-        // 첫 fake 즉시 알림 원하면 아래 주석 해제하여 지연 표시
-        // if (!showWarning && !warningDelayRef.current) {
-        //   warningDelayRef.current = setTimeout(() => {
-        //     setShowWarning(true);
-        //     warningDelayRef.current = null;
-        //   }, 1000);
-        // }
 
         if (fakeStreakRef.current >= 2) { // 2회 연속 fake → 경고 ON
           setShowWarning(true);
@@ -361,7 +516,9 @@ const App = () => {
 
     return () => {
       if (DeepfakeDetector?.stopStreamMonitor) {
-        try { DeepfakeDetector.stopStreamMonitor(); } catch (e) {
+        try {
+          DeepfakeDetector.stopStreamMonitor();
+        } catch (e) {
           console.warn('[App] stopStreamMonitor (cleanup) failed:', e?.message || e);
         }
       }
@@ -385,7 +542,7 @@ const App = () => {
         )}
 
         <Modal visible={callModalVisible} animationType="slide" transparent={false}>
-          {callState === 'active' && callPeer?.number ? (
+          {callState === 'active' && !!callPeer?.number ? (
             <>
               <InCallScreen peer={callPeer} onHangup={handleRejectOrHangup} />
               <WarningScreen
