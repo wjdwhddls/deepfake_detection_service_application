@@ -192,6 +192,7 @@
 //   });
 
 // export default ResultScreen;
+// 위에 맨 처음 기존 코드 혹시 대비용 코드 지우지 말기
 
 import React from 'react';
 import {

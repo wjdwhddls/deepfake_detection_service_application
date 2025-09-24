@@ -247,6 +247,7 @@
 //   });
 
 // export default HomeScreen;
+// 위에 맨 처음 기존 코드 혹시 대비용 코드 지우지 말기
 
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -283,6 +284,8 @@ const PALETTE = {
   btnBlue: '#2F84FF',
   success1: '#34D399',
   success2: '#059669',
+  warn1: '#F59E0B',
+  warn2: '#D97706',
   danger1: '#FF4D4F',
   danger2: '#C81D25',
   track: 'rgba(255,255,255,0.18)',
@@ -324,6 +327,18 @@ const EqualizerBackground = ({ styles, variant = 'center' }) => {
     </View>
   );
 };
+
+/** 확률 → 단계 매핑 */
+function verdictFromProb(probReal) {
+  const p = typeof probReal === 'number' ? probReal : 0;
+  if (p >= 0.8) {
+    return { key: 'safe', label: '안전', emoji: '✅', colors: [PALETTE.success1, PALETTE.success2], desc: '진짜일 가능성이 높습니다.', tierIndex: 2 };
+  }
+  if (p >= 0.5) {
+    return { key: 'warn', label: '주의', emoji: '⚠️', colors: [PALETTE.warn1, PALETTE.warn2], desc: '추가 확인이 필요합니다.', tierIndex: 1 };
+  }
+  return { key: 'danger', label: '위험', emoji: '⛔️', colors: [PALETTE.danger1, PALETTE.danger2], desc: '가짜/사기 의심이 큽니다.', tierIndex: 0 };
+}
 
 const HomeScreen = () => {
   const [resultData, setResultData] = useState(null);
@@ -479,10 +494,9 @@ const HomeScreen = () => {
   const pulseScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.5] });
   const pulseOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.28, 0] });
 
-  // 결과 계산(색/라벨)
-  const isReal = (resultData?.result || '').includes('진짜');
-  const realPct = typeof resultData?.prob_real === 'number' ? Math.round(resultData.prob_real * 100) : null;
-  const verdictColors = isReal ? [PALETTE.success1, PALETTE.success2] : [PALETTE.danger1, PALETTE.danger2];
+  // 결과 계산(단계)
+  const probReal = typeof resultData?.prob_real === 'number' ? resultData.prob_real : 0;
+  const v = verdictFromProb(probReal); // {key,label,emoji,colors,desc,tierIndex}
 
   return (
     <View style={styles.container}>
@@ -534,16 +548,12 @@ const HomeScreen = () => {
       <Modal
         visible={resultVisible}
         transparent
-        statusBarTranslucent   // ✅ 상태바 영역까지 덮기
+        statusBarTranslucent
         animationType="none"
         onRequestClose={closeResultSheet}
       >
-        {/* 모달이 보일 때 상태바도 어둡게 */}
         <StatusBar translucent backgroundColor="rgba(0,0,0,0.6)" barStyle="light-content" />
-
-        {/* 전체 디밍 레이어 */}
         <View style={styles.modalRoot}>
-          {/* 빈 Pressable: 어디든 탭하면 닫힘 */}
           <Pressable style={StyleSheet.absoluteFill} onPress={closeResultSheet} />
           <SafeAreaView pointerEvents="box-none" style={styles.sheetContainer}>
             <Animated.View
@@ -557,33 +567,24 @@ const HomeScreen = () => {
             >
               <View style={styles.handle} />
 
-              {/* 판정 카드 */}
-              <LinearGradient colors={verdictColors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.verdictCard}>
-                <Text style={styles.verdictEmoji}>{isReal ? '✅' : '⚠️'}</Text>
-                <Text style={styles.verdictText}>{isReal ? '안전한 진짜 음성' : '의심되는 가짜 음성'}</Text>
-                {realPct !== null && <Text style={styles.verdictPercent}>{realPct}%</Text>}
+              {/* 단계 카드 (숫자 제거) */}
+              <LinearGradient colors={v.colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.verdictCard}>
+                <Text style={styles.verdictEmoji}>{v.emoji}</Text>
+                <Text style={styles.verdictText}>{v.label}</Text>
+                <Text style={styles.verdictDesc}>{v.desc}</Text>
               </LinearGradient>
 
-              {/* 보조 정보 + 진행바 */}
-              {realPct !== null && (
-                <View style={{ marginTop: 12 }}>
-                  <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>Real 확률</Text>
-                    <Text style={styles.infoValue}>{realPct}%</Text>
-                  </View>
-                  <View style={styles.progressTrack}>
-                    <View
-                      style={[
-                        styles.progressFill,
-                        {
-                          width: `${Math.max(0, Math.min(100, realPct))}%`,
-                          backgroundColor: isReal ? PALETTE.success1 : PALETTE.danger1,
-                        },
-                      ]}
-                    />
-                  </View>
-                </View>
-              )}
+              {/* 3단계 인디케이터 */}
+              <View style={styles.tierRow}>
+                {['위험', '주의', '안전'].map((t, idx) => {
+                  const active = idx === v.tierIndex;
+                  return (
+                    <View key={t} style={[styles.tierPill, active && styles.tierPillActive]}>
+                      <Text style={[styles.tierText, active && styles.tierTextActive]}>{t}</Text>
+                    </View>
+                  );
+                })}
+              </View>
 
               {/* 버튼 (기존 기능 유지) */}
               <View style={styles.sheetButtons}>
@@ -646,7 +647,7 @@ const getStyles = () =>
     /** 모달 루트(상태바까지 덮음) */
     modalRoot: {
       flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.6)', // ✅ 화면 전체 어둡게
+      backgroundColor: 'rgba(0,0,0,0.6)',
       justifyContent: 'flex-end',
     },
     sheetContainer: { flex: 1, justifyContent: 'flex-end' },
@@ -661,18 +662,30 @@ const getStyles = () =>
     },
     handle: { alignSelf: 'center', width: 44, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.2)', marginBottom: 12 },
 
-    /** 판정 카드 */
-    verdictCard: { borderRadius: 14, paddingVertical: 16, paddingHorizontal: 16, alignItems: 'center' },
-    verdictEmoji: { fontSize: 28, marginBottom: 4 },
-    verdictText: { color: PALETTE.white, fontSize: 18, fontWeight: '900', letterSpacing: 0.5 },
-    verdictPercent: { color: PALETTE.white, fontSize: 24, fontWeight: '900', marginTop: 2 },
+    /** 단계 카드 */
+    verdictCard: { borderRadius: 14, paddingVertical: 18, paddingHorizontal: 16, alignItems: 'center' },
+    verdictEmoji: { fontSize: 28, marginBottom: 6 },
+    verdictText: { color: PALETTE.white, fontSize: 20, fontWeight: '900', letterSpacing: 0.5 },
+    verdictDesc: { color: 'rgba(255,255,255,0.92)', fontSize: 14, marginTop: 4 },
 
-    /** 보조 정보 + 진행바 */
-    infoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, marginTop: 6 },
-    infoLabel: { color: 'rgba(255,255,255,0.75)', fontSize: 14, fontWeight: '700' },
-    infoValue: { color: PALETTE.white, fontSize: 16, fontWeight: '900' },
-    progressTrack: { height: 10, backgroundColor: PALETTE.track, borderRadius: 8, overflow: 'hidden' },
-    progressFill: { height: '100%', borderRadius: 8 },
+    /** 3단계 인디케이터 */
+    tierRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 14 },
+    tierPill: {
+      flex: 1,
+      marginHorizontal: 4,
+      paddingVertical: 10,
+      borderRadius: 10,
+      backgroundColor: 'rgba(255,255,255,0.06)',
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.08)',
+    },
+    tierPillActive: {
+      backgroundColor: 'rgba(255,255,255,0.18)',
+      borderColor: 'rgba(255,255,255,0.35)',
+    },
+    tierText: { color: 'rgba(255,255,255,0.75)', fontWeight: '800' },
+    tierTextActive: { color: PALETTE.white },
 
     /** 버튼 */
     sheetButtons: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 },
