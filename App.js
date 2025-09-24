@@ -1,5 +1,6 @@
+// App.js
 import React, { useState, useEffect, useRef } from 'react';
-import { Modal } from 'react-native';
+import { Modal, NativeModules, NativeEventEmitter } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Icon from 'react-native-vector-icons/Ionicons';
@@ -28,6 +29,9 @@ import CallScreen from './src/screens/CallScreen';
 import InCallScreen from './src/screens/InCallScreen';
 import WarningScreen from './src/screens/WarningScreen';
 import useVoIPConnection from './src/services/useVoIPConnection';
+
+const { DeepfakeDetector } = NativeModules || {};
+const deepfakeEvents = DeepfakeDetector ? new NativeEventEmitter(DeepfakeDetector) : null;
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -127,26 +131,104 @@ const App = () => {
   const [socket, setSocket] = useState(null);
   const [remotePeerId, setRemotePeerId] = useState(null);
   const [userPhoneNumber, setUserPhoneNumber] = useState(null);
-  const [callState, setCallState] = useState('idle');
+  const [callState, setCallState] = useState('idle'); // 'idle' | 'incoming' | 'outgoing' | 'active' | 'ended'
   const [callModalVisible, setCallModalVisible] = useState(false);
   const [isCaller, setIsCaller] = useState(false);
   const [callPeer, setCallPeer] = useState({ name: '', number: '' });
   const [remoteStreamExists, setRemoteStreamExists] = useState(false);
   const [showWarning, setShowWarning] = useState(false);
-  const warningTimer = useRef(null);
+  const [remoteAudioTrackId, setRemoteAudioTrackId] = useState(null);
+
+  // 연속 판정/지연용 ref
+  const fakeStreakRef = useRef(0);
+  const realStreakRef = useRef(0);
+  const warningDelayRef = useRef(null);
 
   useEffect(() => { checkPermissions(); }, []);
+
+  // 모델 1회 로드
+  useEffect(() => {
+    (async () => {
+      try {
+        if (DeepfakeDetector?.initModel) {
+          await DeepfakeDetector.initModel();
+          console.log('[App] Deepfake model initialized');
+        } else {
+          console.log('[App] DeepfakeDetector native module not found');
+        }
+      } catch (e) {
+        console.warn('[App] Deepfake model init failed:', e?.message || e);
+      }
+    })();
+  }, []);
+
+  // DeepfakeVerdict 이벤트로 경고 제어 (연속 판정 기반)
+  useEffect(() => {
+    if (!deepfakeEvents) return;
+
+    const onVerdict = (p) => {
+      // p: { prob_real, decision: 'real'|'fake', windowMs, timestamp }
+      if (!callModalVisible || callState !== 'active' || isCaller) return; // 수신자 + 통화중
+
+      if (p.decision === 'fake') {
+        fakeStreakRef.current += 1;
+        realStreakRef.current = 0;
+
+        // 첫 fake 즉시 알림 원하면 아래 주석 해제하여 지연 표시
+        // if (!showWarning && !warningDelayRef.current) {
+        //   warningDelayRef.current = setTimeout(() => {
+        //     setShowWarning(true);
+        //     warningDelayRef.current = null;
+        //   }, 1000);
+        // }
+
+        if (fakeStreakRef.current >= 2) { // 2회 연속 fake → 경고 ON
+          setShowWarning(true);
+        }
+      } else {
+        realStreakRef.current += 1;
+        fakeStreakRef.current = 0;
+
+        // 3회 연속 real → 경고 OFF (히스테리시스)
+        if (realStreakRef.current >= 3 && showWarning) {
+          setShowWarning(false);
+        }
+
+        if (warningDelayRef.current) {
+          clearTimeout(warningDelayRef.current);
+          warningDelayRef.current = null;
+        }
+      }
+    };
+
+    const sub = deepfakeEvents.addListener('DeepfakeVerdict', onVerdict);
+    return () => {
+      sub.remove();
+      if (warningDelayRef.current) {
+        clearTimeout(warningDelayRef.current);
+        warningDelayRef.current = null;
+      }
+    };
+  }, [callModalVisible, callState, isCaller, showWarning]);
+
+  const resetVerdictState = () => {
+    fakeStreakRef.current = 0;
+    realStreakRef.current = 0;
+    if (warningDelayRef.current) {
+      clearTimeout(warningDelayRef.current);
+      warningDelayRef.current = null;
+    }
+  };
 
   const onLoginSuccess = (phoneNumber) => {
     setUserPhoneNumber(phoneNumber);
     setIsLoggedIn(true);
-    const webSocket = io('http://10.0.2.2:3000');
 
+    const webSocket = io('http://10.0.2.2:3000');
     webSocket.on('connect', () => {
       console.log('[Socket] Connected');
       webSocket.emit('register-user', { phoneNumber });
     });
-
     webSocket.on('call', ({ from, number, name }) => {
       console.log('[Socket] Received call from:', from);
       setRemotePeerId(from);
@@ -155,19 +237,27 @@ const App = () => {
       setCallModalVisible(true);
       setIsCaller(false);
     });
-
     webSocket.on('call-ack', ({ toSocketId }) => {
       console.log('[Socket] Received call-ack with toSocketId:', toSocketId);
       setRemotePeerId(toSocketId);
     });
-
     webSocket.on('call-ended', () => {
       handleRejectOrHangup();
     });
-
     setSocket(webSocket);
+
+    // 로그인 직후 1회: 플레이백 캡처 권한 요청 (Android 10+)
+    (async () => {
+      try {
+        await DeepfakeDetector?.requestPlaybackCapture?.();
+        console.log('[Deepfake] playback capture granted (or ignored on unsupported devices)');
+      } catch (e) {
+        console.warn('[Deepfake] capture request failed:', e?.message || e);
+      }
+    })();
   };
 
+  // 로그아웃/세션종료 시 정리
   useEffect(() => {
     if (!isLoggedIn && socket) {
       socket.disconnect();
@@ -179,8 +269,10 @@ const App = () => {
       setCallModalVisible(false);
       setCallPeer({ name: '', number: '' });
       setRemoteStreamExists(false);
+      setRemoteAudioTrackId(null);
       setShowWarning(false);
-      if (warningTimer.current) clearTimeout(warningTimer.current);
+      resetVerdictState();
+      try { DeepfakeDetector?.stopStreamMonitor?.(); } catch {}
     }
   }, [isLoggedIn]);
 
@@ -211,27 +303,15 @@ const App = () => {
     setIsCaller(false);
     setCallPeer({ name: '', number: '' });
     setRemoteStreamExists(false);
+    setRemoteAudioTrackId(null);
     setShowWarning(false);
-    if (warningTimer.current) clearTimeout(warningTimer.current);
+    resetVerdictState();
+    try { DeepfakeDetector?.stopStreamMonitor?.(); } catch (e) {
+      console.warn('[App] stopStreamMonitor error:', e?.message || e);
+    }
   };
 
-  // 5초 후 수신자에만 WarningScreen 표시
-  useEffect(() => {
-    if (!isCaller && callState === 'active' && callModalVisible) {
-      if (warningTimer.current) clearTimeout(warningTimer.current);
-      warningTimer.current = setTimeout(() => setShowWarning(true), 5000);
-    } else {
-      setShowWarning(false);
-      if (warningTimer.current) {
-        clearTimeout(warningTimer.current);
-        warningTimer.current = null;
-      }
-    }
-    return () => {
-      if (warningTimer.current) clearTimeout(warningTimer.current);
-    };
-  }, [isCaller, callState, callModalVisible]);
-
+  // WebRTC 연결 훅
   const { acceptCall } = useVoIPConnection({
     enabled: callModalVisible && !!remotePeerId && (isCaller || callState === 'active'),
     remotePeerId,
@@ -242,6 +322,13 @@ const App = () => {
         console.log('[VoIP] Remote stream received');
         setRemoteStreamExists(true);
         setCallState('active');
+        const audioTrack = stream.getAudioTracks?.()[0];
+        if (audioTrack?.id) {
+          setRemoteAudioTrackId(audioTrack.id);
+          console.log('[VoIP] Remote audio track id:', audioTrack.id);
+        } else {
+          setRemoteAudioTrackId(null);
+        }
       }
     },
     onHangup: handleRejectOrHangup,
@@ -253,7 +340,34 @@ const App = () => {
     acceptCall();
   };
 
-  // WarningScreen에서도 종료할 수 있도록
+  // 통화 active + 원격 트랙 확보되면 실시간 모니터 시작/정지 (App.js에서만 관리)
+  useEffect(() => {
+    const canStart =
+      callState === 'active' &&
+      callModalVisible &&
+      remoteAudioTrackId &&
+      DeepfakeDetector?.startStreamMonitor;
+
+    if (canStart) {
+      (async () => {
+        try {
+          console.log('[App] startStreamMonitor:', remoteAudioTrackId);
+          await DeepfakeDetector.startStreamMonitor(remoteAudioTrackId, { windowMs: 2000 });
+        } catch (e) {
+          console.warn('[App] startStreamMonitor failed:', e?.message || e);
+        }
+      })();
+    }
+
+    return () => {
+      if (DeepfakeDetector?.stopStreamMonitor) {
+        try { DeepfakeDetector.stopStreamMonitor(); } catch (e) {
+          console.warn('[App] stopStreamMonitor (cleanup) failed:', e?.message || e);
+        }
+      }
+    };
+  }, [callState, callModalVisible, remoteAudioTrackId]);
+
   const handleWarningClose = () => setShowWarning(false);
 
   return (
@@ -274,7 +388,6 @@ const App = () => {
           {callState === 'active' && callPeer?.number ? (
             <>
               <InCallScreen peer={callPeer} onHangup={handleRejectOrHangup} />
-              {/* WarningScreen은 InCallScreen 위에 겹쳐서 띄움 */}
               <WarningScreen
                 visible={showWarning}
                 onClose={handleWarningClose}
