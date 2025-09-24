@@ -1,3 +1,4 @@
+// src/screens/SignUpScreen.js
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator,
@@ -6,24 +7,20 @@ import {
 import axios from 'axios';
 import LinearGradient from 'react-native-linear-gradient';
 
+const API_BASE = 'http://ec2-43-203-141-45.ap-northeast-2.compute.amazonaws.com';
+// const API_BASE = 'http://10.0.2.2:3000';
+
 const C = {
   g1: '#20B2F3',
   g2: '#5E73F7',
   g3: '#0F1730',
-  blobLT: 'rgba(255,255,255,0.18)',   // 유지(팔레트 통일)
-  blobRB: 'rgba(0,0,0,0.18)',         // 유지(팔레트 통일)
   white: '#FFFFFF',
-  btnBlue: '#2F84FF',
 };
 
 const UserGenderEnum = { MAN: 'MAN', WOMAN: 'WOMAN' };
 
 const { width: W, height: H } = Dimensions.get('window');
 const MAX = Math.max(W, H);
-
-// 반응형 로고 크기 (원하면 고정값 유지 가능)
-const LOGO_W = Math.min(W * 0.6, 340);
-const LOGO_H = LOGO_W * (90 / 200); // Detection.png (200x90) 기준 비율
 
 const SignUpScreen = ({ navigation }) => {
   const [name, setName] = useState('');
@@ -34,7 +31,6 @@ const SignUpScreen = ({ navigation }) => {
   const [tel, setTel] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // ===== 기존 회원가입 로직: 그대로 =====
   const handleSignUp = async () => {
     if (!name || !email || !password || !confirmPassword || !tel) {
       Alert.alert('오류', '모든 필드를 입력하세요.');
@@ -56,17 +52,19 @@ const SignUpScreen = ({ navigation }) => {
       role: 'USER',
     };
 
-    console.log('전송할 데이터:', requestData);
-
     try {
-      const response = await axios.post('http://10.0.2.2:3000/api/users/', requestData);
-      console.log('서버 응답:', response.data);
+      const response = await axios.post(`${API_BASE}/api/users/`, requestData);
       if (response.status === 201) {
         Alert.alert('회원가입 성공!', '계정이 성공적으로 생성되었습니다!');
         navigation.navigate('Login');
+      } else {
+        const msg =
+          typeof response.data === 'string' ? response.data :
+          (Array.isArray(response.data) ? response.data.join(', ') :
+          (response.data?.message || '회원가입 중 오류가 발생했습니다.'));
+        Alert.alert('회원가입 실패', msg);
       }
     } catch (err) {
-      console.error('회원가입 요청 에러 발생:', err);
       let message = '회원가입 중 오류가 발생했습니다.';
       if (err.response) {
         if (typeof err.response.data === 'string') message = err.response.data;
@@ -81,11 +79,9 @@ const SignUpScreen = ({ navigation }) => {
       setLoading(false);
     }
   };
-  // ======================================
 
   return (
     <SafeAreaView style={styles.safe}>
-      {/* 기본 그라디언트(로그인과 동일 팔레트) */}
       <LinearGradient
         colors={[C.g1, C.g2, C.g3]}
         locations={[0, 0.55, 1]}
@@ -94,7 +90,7 @@ const SignUpScreen = ({ navigation }) => {
         pointerEvents="none"
       />
 
-      {/* 🔵 회원가입만의 배경 변주: 우상단 블롭(시안 계열) */}
+      {/* 우상단/좌하단 블롭 */}
       <View style={styles.blobTRWrap} pointerEvents="none">
         <LinearGradient
           colors={['rgba(255,255,255,0.22)', 'rgba(255,255,255,0.08)']}
@@ -102,8 +98,6 @@ const SignUpScreen = ({ navigation }) => {
           style={styles.blobTR}
         />
       </View>
-
-      {/* 🟣 좌하단 블롭(인디고 계열, 살짝 더 진하게) */}
       <View style={styles.blobLBWrap} pointerEvents="none">
         <LinearGradient
           colors={['rgba(0,0,0,0.18)', 'rgba(0,0,0,0.28)']}
@@ -111,8 +105,6 @@ const SignUpScreen = ({ navigation }) => {
           style={styles.blobLB}
         />
       </View>
-
-      {/* ／ 대각선 라이트 밴드 (살짝 강조) */}
       <LinearGradient
         colors={['rgba(255,255,255,0.10)', 'rgba(255,255,255,0.00)']}
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
@@ -122,10 +114,8 @@ const SignUpScreen = ({ navigation }) => {
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <View style={styles.container}>
-          {/* 로고 */}
           <Image source={require('../assets/Detection.png')} style={styles.logo} resizeMode="contain" />
 
-          {/* 입력 필드 */}
           <View style={styles.inputPill}>
             <TextInput
               style={styles.inputText}
@@ -167,7 +157,6 @@ const SignUpScreen = ({ navigation }) => {
             />
           </View>
 
-          {/* 성별 세그먼트 */}
           <Text style={styles.genderLabel}>성별</Text>
           <View style={styles.genderSegment}>
             <TouchableOpacity
@@ -186,7 +175,6 @@ const SignUpScreen = ({ navigation }) => {
             </TouchableOpacity>
           </View>
 
-          {/* 가입 버튼 */}
           <TouchableOpacity style={styles.cta} activeOpacity={0.9} onPress={handleSignUp}>
             <LinearGradient colors={['#0AA7F6', '#2E7BFF']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.ctaInner}>
               {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.ctaText}>회원 가입</Text>}
@@ -203,20 +191,11 @@ const SignUpScreen = ({ navigation }) => {
   );
 };
 
-/* ====================== styles ====================== */
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#0A1430' },
-
   container: { flex: 1, paddingHorizontal: 22, justifyContent: 'center' },
+  logo: { width: 300, height: 200, alignSelf: 'center' },
 
-  // 로고 (반응형)
-  logo: {
-    width: 300,
-    height: 200,
-    alignSelf: 'center',
-  },
-
-  // ==== 회원가입만의 배경 블롭/요소들 ====
   blobTRWrap: {
     position: 'absolute',
     top: -MAX * 0.18,
@@ -226,10 +205,7 @@ const styles = StyleSheet.create({
     borderRadius: 9999,
     overflow: 'hidden',
   },
-  blobTR: {
-    flex: 1,
-    borderRadius: 9999,
-  },
+  blobTR: { flex: 1, borderRadius: 9999 },
 
   blobLBWrap: {
     position: 'absolute',
@@ -240,22 +216,7 @@ const styles = StyleSheet.create({
     borderRadius: 9999,
     overflow: 'hidden',
   },
-  blobLB: {
-    flex: 1,
-    borderRadius: 9999,
-  },
-
-  ring: {
-    position: 'absolute',
-    width: MAX * 0.75,
-    height: MAX * 0.75,
-    borderRadius: 9999,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.12)',
-    top: MAX * 0.12,
-    left: -MAX * 0.15,
-    transform: [{ rotate: '12deg' }],
-  },
+  blobLB: { flex: 1, borderRadius: 9999 },
 
   diagBand: {
     position: 'absolute',
@@ -267,7 +228,6 @@ const styles = StyleSheet.create({
     borderRadius: 40,
   },
 
-  // ==== 입력 / 세그먼트 / 버튼 ====
   inputPill: {
     height: 58,
     borderRadius: 30,
