@@ -30,8 +30,8 @@ const DashBoardScreen = ({ navigation }) => {
       if (!token) throw new Error('다시 로그인 해주세요.');
 
       const url = query
-        ? `http://172.30.1.52:3000/api/dashboard/search?title=${query}`
-        : 'http://172.30.1.52:3000/api/dashboard';
+        ? `http://ec2-43-203-141-45.ap-northeast-2.compute.amazonaws.com/api/dashboard/search?title=${query}`
+        : 'http://ec2-43-203-141-45.ap-northeast-2.compute.amazonaws.com/api/dashboard';
 
       const response = await axios.get(url, {
         headers: { Authorization: `Bearer ${token}` },
