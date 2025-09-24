@@ -25,6 +25,7 @@
     "react-native-animatable": "^1.4.0",
     "react-native-elements": "^3.4.3",
     "react-native-file-picker": "^0.0.21",
+    "react-native-fs": "^2.20.0",
     "react-native-gesture-handler": "^2.25.0",
     "react-native-incall-manager": "^4.2.1",
     "react-native-linear-gradient": "^2.8.3",
