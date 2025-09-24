@@ -11,9 +11,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import SuccessDialog from '../components/SuccessDialog';
 import ErrorDialog from '../components/ErrorDialog';
+import { api } from '../lib/config';
 
 // 서버 주소: 에뮬레이터용은 10.0.2.2, 실제 기기/배포용은 EC2
-const API_BASE = 'http://ec2-43-203-141-45.ap-northeast-2.compute.amazonaws.com';
 // const API_BASE = 'http://10.0.2.2:3000';
 
 /* ====================== 에러 메시지 한글 변환 유틸 ====================== */
@@ -87,8 +87,8 @@ const LoginScreen = ({ setIsLoggedIn, onLoginSuccess }) => {
     const trimmedPassword = password;
 
     try {
-      const response = await axios.post(
-        `${API_BASE}/api/auth/signin`,
+      const response = await api.post(
+        `/api/auth/signin`,
         { user_id: trimmedEmail, user_pw: trimmedPassword },
         { headers: { 'Content-Type': 'application/json' }, validateStatus: (s) => s < 500 }
       );

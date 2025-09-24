@@ -6,9 +6,7 @@ import {
 } from 'react-native';
 import axios from 'axios';
 import LinearGradient from 'react-native-linear-gradient';
-
-const API_BASE = 'http://ec2-43-203-141-45.ap-northeast-2.compute.amazonaws.com';
-// const API_BASE = 'http://10.0.2.2:3000';
+import { api } from '../lib/config';
 
 const C = {
   g1: '#20B2F3',
@@ -53,7 +51,7 @@ const SignUpScreen = ({ navigation }) => {
     };
 
     try {
-      const response = await axios.post(`${API_BASE}/api/users/`, requestData);
+      const response = await api.post(`/api/users/`, requestData);
       if (response.status === 201) {
         Alert.alert('회원가입 성공!', '계정이 성공적으로 생성되었습니다!');
         navigation.navigate('Login');

@@ -12,7 +12,7 @@ import io from 'socket.io-client';
 
 import { ThemeProvider } from './src/contexts/ThemeContext';
 import { checkPermissions } from './src/services/PhoneService';
-import { SERVER_URL } from './src/config';
+import { SERVER_URL } from './src/lib/config';
 
 import HomeScreen from './src/screens/HomeScreen';
 import DashBoardScreen from './src/screens/DashBoardScreen';
