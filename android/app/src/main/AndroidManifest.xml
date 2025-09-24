@@ -46,6 +46,7 @@
       </intent-filter>
     </activity>
 
+    <!-- 통화 오버레이 액티비티 (필요한 경우) -->
     <activity
         android:name=".Call.CallOverlayActivity"
         android:exported="true"
@@ -55,6 +56,7 @@
         android:theme="@android:style/Theme.Translucent.NoTitleBar"
         tools:ignore="UnusedAttribute">
       <intent-filter>
+        <!-- MAIN만 있고 LAUNCHER는 없으므로 런처로 보이지 않음 -->
         <action android:name="android.intent.action.MAIN" />
         <category android:name="android.intent.category.DEFAULT" />
       </intent-filter>
@@ -66,52 +68,6 @@
         android:exported="false"
         android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
-    <service
-        android:name=".Call.CallBackgroundMessaging"
-        android:exported="false" />
-
-    <service
-        android:name=".Call.CallScreeningServiceImpl"
-        android:exported="true"
-        android:permission="android.permission.BIND_SCREENING_SERVICE">
-      <intent-filter>
-        <action android:name="android.telecom.CallScreeningService" />
-      </intent-filter>
-    </service>
-
-  </application>
-</manifest>
-
-        android:windowSoftInputMode="adjustResize"
-        android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode">
-      <intent-filter>
-        <action android:name="android.intent.action.MAIN" />
-        <category android:name="android.intent.category.LAUNCHER" />
-      </intent-filter>
-    </activity>
-
-    <!-- 통화 오버레이 액티비티 (필요한 경우) -->
-    <activity
-        android:name=".Call.CallOverlayActivity"
-        android:exported="true"
-        android:launchMode="singleTop"
-        android:screenOrientation="portrait"
-        android:windowSoftInputMode="stateAlwaysHidden"
-        android:theme="@android:style/Theme.Translucent.NoTitleBar"
-        tools:ignore="UnusedAttribute">
-      <intent-filter>
-        <action android:name="android.intent.action.MAIN" />
-        <category android:name="android.intent.category.DEFAULT" />
-      </intent-filter>
-    </activity>
-
-    <!-- 🔴 PlaybackCaptureActivity: 미디어 프로젝션 권한 요청용 (반드시 추가) -->
-    <activity
-        android:name=".PlaybackCaptureActivity"
-        android:exported="false"
-        android:theme="@android:style/Theme.Translucent.NoTitleBar" />
-
-    <!-- 서비스들 (있다면) -->
     <service
         android:name=".Call.CallBackgroundMessaging"
         android:exported="false" />
