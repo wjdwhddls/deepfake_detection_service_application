@@ -5,26 +5,27 @@ buildscript {
     compileSdkVersion = 35
     targetSdkVersion = 35
     ndkVersion = "27.1.12297006"
-    kotlinVersion = "1.8.0"
+    kotlinVersion = "1.9.24"   // ok (AGP 8.8과 호환)
   }
   repositories {
     google()
     mavenCentral()
-    maven { url 'https://mvn.0110.be/releases' }   // ⬅️ 추가
-    // (있다면 그대로) maven { url 'https://jitpack.io' }
+    maven { url = uri('https://mvn.0110.be/releases') } // TarsosDSP  ← '=' 로 교체
+    // maven { url = uri('https://jitpack.io') }        // 쓰면 유지(= 로 교체)
   }
   dependencies {
-    classpath("com.android.tools.build:gradle")
+    classpath("com.android.tools.build:gradle:8.8.0")
     classpath("com.facebook.react:react-native-gradle-plugin")
-    classpath("org.jetbrains.kotlin:kotlin-gradle-plugin")
+    classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion")
   }
-  allprojects {
-    repositories {
-      mavenCentral()
-      google()
-      maven { url 'https://mvn.0110.be/releases' } // ⬅️ 추가
-      // (있다면 그대로) maven { url 'https://jitpack.io' }
-    }
+}
+
+allprojects {
+  repositories {
+    mavenCentral()
+    google()
+    maven { url = uri('https://mvn.0110.be/releases') } // ← '=' 로 교체
+    // maven { url = uri('https://jitpack.io') }        // ← '=' 로 교체
   }
 }
 
