@@ -6,6 +6,9 @@ import {
   mediaDevices,
   MediaStream,
 } from 'react-native-webrtc';
+import { NativeModules } from 'react-native';
+
+const { DeepfakeDetector } = NativeModules || {};
 
 const peerConfig = {
   iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }],
@@ -26,6 +29,17 @@ export default function useVoIPConnection({
   const remoteMediaStream = useRef(new MediaStream());
   const pendingCandidates = useRef([]);
   const [pendingOffer, setPendingOffer] = useState(null);
+  const currentRemoteTrackId = useRef(null);
+
+  // 네이티브 모듈 초기화 헬퍼
+  const ensureModel = async () => {
+    if (!DeepfakeDetector?.initModel) return;
+    try {
+      await DeepfakeDetector.initModel(); // 여러 번 호출해도 안전
+    } catch (e) {
+      console.warn('[VoIP] Deepfake model init failed:', e?.message || e);
+    }
+  };
 
   // 소켓 신호 핸들러 등록
   useEffect(() => {
@@ -39,7 +53,6 @@ export default function useVoIPConnection({
     const handleAnswer = async ({ answer }) => {
       if (!pc.current) return;
       console.log('[VoIP] 📩 Received answer');
-
       try {
         await pc.current.setRemoteDescription(new RTCSessionDescription(answer));
         console.log('[VoIP] ✅ Set remote description (answer)');
@@ -68,7 +81,7 @@ export default function useVoIPConnection({
     socket.off('answer').on('answer', handleAnswer);
     socket.off('ice').on('ice', handleIce);
 
-    console.log('[VoIP] 📱 Signal handlers registered (always-on)');
+    console.log('[VoIP] 📱 Signal handlers registered');
 
     return () => {
       socket.off('offer', handleOffer);
@@ -84,6 +97,8 @@ export default function useVoIPConnection({
     console.log('[VoIP] ➔ isCaller:', caller);
 
     try {
+      await ensureModel();
+
       const stream = await mediaDevices.getUserMedia({ audio: true });
       console.log('[VoIP] 🎧 Local media stream acquired');
       localStreamRef.current = stream;
@@ -104,11 +119,19 @@ export default function useVoIPConnection({
         }
       };
 
-      pc.current.ontrack = (event) => {
+      pc.current.ontrack = async (event) => {
         const stream = event.streams[0];
+        const track = event.track;
+
         if (stream) {
-          stream.getTracks().forEach((track) => remoteMediaStream.current.addTrack(track));
-          if (onRemoteStream) onRemoteStream(stream);
+          stream.getTracks().forEach((t) => remoteMediaStream.current.addTrack(t));
+          onRemoteStream?.(stream);
+        }
+
+        // 원격 오디오 트랙 ID만 기록 (모니터 시작은 App.js에서만)
+        if (track?.kind === 'audio') {
+          currentRemoteTrackId.current = track.id;
+          console.log('[VoIP] Remote audio track detected:', track.id);
         }
       };
 
@@ -126,11 +149,7 @@ export default function useVoIPConnection({
         const offer = await pc.current.createOffer();
         await pc.current.setLocalDescription(offer);
         console.log('[VoIP] ☎️ Created and sent offer');
-        socket.emit('offer', {
-          offer,
-          to: remotePeerId,
-          from: socket.id,
-        });
+        socket.emit('offer', { offer, to: remotePeerId, from: socket.id });
       }
     } catch (err) {
       console.error('[VoIP] ❌ Error during initConnection:', err);
@@ -142,7 +161,6 @@ export default function useVoIPConnection({
   const acceptCall = async () => {
     if (!pendingOffer) return;
     console.log('[VoIP] ✅ Accepting call...');
-
     await initConnection(false);
 
     try {
@@ -158,12 +176,7 @@ export default function useVoIPConnection({
       await pc.current.setLocalDescription(answer);
       console.log('[VoIP] 📤 Created and sent answer');
 
-      socket.emit('answer', {
-        answer,
-        to: pendingOffer.from,
-        from: socket.id,
-      });
-
+      socket.emit('answer', { answer, to: pendingOffer.from, from: socket.id });
       setPendingOffer(null);
     } catch (err) {
       console.error('[VoIP] ❌ Failed to accept call:', err);
@@ -171,6 +184,7 @@ export default function useVoIPConnection({
     }
   };
 
+  // lifecycle
   useEffect(() => {
     if (!enabled) {
       console.warn('[VoIP] Skipping setup (enabled/socket):', {
@@ -197,6 +211,7 @@ export default function useVoIPConnection({
       remoteMediaStream.current = new MediaStream();
       pendingCandidates.current = [];
       setPendingOffer(null);
+      currentRemoteTrackId.current = null;
     };
   }, [enabled, remotePeerId, socket, isCaller]);
 

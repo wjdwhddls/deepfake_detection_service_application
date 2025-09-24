@@ -1,88 +1,129 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"  
-          xmlns:tools="http://schemas.android.com/tools"> <!-- tools namespace 추가 -->
+<!-- android/app/src/main/AndroidManifest.xml -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Required Permissions -->
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.READ_PROFILE" />
-    <uses-permission android:name="android.permission.WRITE_CONTACTS" />
-    <uses-permission android:name="android.permission.READ_CALL_LOG" />
-    <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
-    <uses-permission android:name="android.permission.BIND_TELECOM_CONNECTION_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
-    <uses-permission android:name="android.permission.CALL_PHONE" />
-    <uses-permission android:name="android.permission.READ_CONTACTS" />
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <uses-permission android:name="android.permission.BIND_SCREENING_SERVICE" />
-    <uses-permission android:name="android.permission.BIND_INCALL_SERVICE" />
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-    <uses-permission android:name="android.permission.BIND_CALL_REDIRECTION_SERVICE" />
-    <uses-permission android:name="android.permission.MODIFY_PHONE_STATE" />
-    <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
-    <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
-    <uses-permission android:name="android.permission.PROCESS_OUTGOING_CALLS" />
-    <uses-feature android:name="android.hardware.telephony" />
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <uses-permission android:name="android.permission.VIBRATE"/>
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />  
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
-    <uses-permission android:name="android.permission.MANAGE_OWN_CALLS"/>
-    <uses-permission android:name="android.permission.CAMERA" />
-    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.VIBRATE" />
+  <!-- 네트워크/오디오/파일 권한 -->
+  <uses-permission android:name="android.permission.INTERNET" />
+  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+  <uses-permission android:name="android.permission.RECORD_AUDIO" />
+  <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+  <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+  <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:targetApi="28" />
+  <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" tools:targetApi="28" />
+  <uses-permission android:name="android.permission.VIBRATE" />
+  <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+  <!-- (선택) 전화 관련 – 필요 시 유지 -->
+  <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+  <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
+  <uses-permission android:name="android.permission.CALL_PHONE" />
+  <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
+  <uses-permission android:name="android.permission.PROCESS_OUTGOING_CALLS" tools:targetApi="28" />
+  <uses-permission android:name="android.permission.READ_CONTACTS" />
+  <uses-permission android:name="android.permission.READ_CALL_LOG" />
 
-
-
-    <application
+  <application
       android:name=".MainApplication"
       android:label="@string/app_name"
       android:icon="@mipmap/ic_launcher"
       android:roundIcon="@mipmap/ic_launcher_round"
       android:allowBackup="false"
-      android:theme="@style/AppTheme"
       android:supportsRtl="true"
-      android:usesCleartextTraffic="true">
-      <activity
+      android:theme="@style/AppTheme"
+      android:usesCleartextTraffic="true"
+      android:allowAudioPlaybackCapture="true">
+
+    <activity
         android:name=".MainActivity"
         android:label="@string/app_name"
-        android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
+        android:exported="true"
         android:launchMode="singleTask"
         android:windowSoftInputMode="adjustResize"
-        android:exported="true">
-        <intent-filter>
-            <action android:name="android.intent.action.MAIN" />
-            <category android:name="android.intent.category.LAUNCHER" />
-        </intent-filter>
-      </activity>
+        android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+    </activity>
 
-      <activity
-            android:name=".Call.CallOverlayActivity"
-            android:theme="@android:style/Theme.Translucent.NoTitleBar"
-            android:windowSoftInputMode="stateAlwaysHidden"
-            android:showOnLockScreen="true"
-            android:excludeFromRecents="true"
-            android:launchMode="singleTop"
-            android:screenOrientation="portrait"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-        </activity>
+    <activity
+        android:name=".Call.CallOverlayActivity"
+        android:exported="true"
+        android:launchMode="singleTop"
+        android:screenOrientation="portrait"
+        android:windowSoftInputMode="stateAlwaysHidden"
+        android:theme="@android:style/Theme.Translucent.NoTitleBar"
+        tools:ignore="UnusedAttribute">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.DEFAULT" />
+      </intent-filter>
+    </activity>
 
-      <service
+    <!-- Playback capture 권한 UI용 (필요 시) -->
+    <activity
+        android:name=".PlaybackCaptureActivity"
+        android:exported="false"
+        android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+    <service
         android:name=".Call.CallBackgroundMessaging"
         android:exported="false" />
-      <service
+
+    <service
         android:name=".Call.CallScreeningServiceImpl"
-        android:permission="android.permission.BIND_SCREENING_SERVICE"
-        android:exported="true"> 
-        <intent-filter>
-          <action android:name="android.telecom.CallScreeningService" />
-        </intent-filter>
-      </service>
-    </application>
+        android:exported="true"
+        android:permission="android.permission.BIND_SCREENING_SERVICE">
+      <intent-filter>
+        <action android:name="android.telecom.CallScreeningService" />
+      </intent-filter>
+    </service>
+
+  </application>
+</manifest>
+
+        android:windowSoftInputMode="adjustResize"
+        android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+    </activity>
+
+    <!-- 통화 오버레이 액티비티 (필요한 경우) -->
+    <activity
+        android:name=".Call.CallOverlayActivity"
+        android:exported="true"
+        android:launchMode="singleTop"
+        android:screenOrientation="portrait"
+        android:windowSoftInputMode="stateAlwaysHidden"
+        android:theme="@android:style/Theme.Translucent.NoTitleBar"
+        tools:ignore="UnusedAttribute">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.DEFAULT" />
+      </intent-filter>
+    </activity>
+
+    <!-- 🔴 PlaybackCaptureActivity: 미디어 프로젝션 권한 요청용 (반드시 추가) -->
+    <activity
+        android:name=".PlaybackCaptureActivity"
+        android:exported="false"
+        android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+    <!-- 서비스들 (있다면) -->
+    <service
+        android:name=".Call.CallBackgroundMessaging"
+        android:exported="false" />
+
+    <service
+        android:name=".Call.CallScreeningServiceImpl"
+        android:exported="true"
+        android:permission="android.permission.BIND_SCREENING_SERVICE">
+      <intent-filter>
+        <action android:name="android.telecom.CallScreeningService" />
+      </intent-filter>
+    </service>
+
+  </application>
 </manifest>
