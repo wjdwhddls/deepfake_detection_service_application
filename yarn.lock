@@ -1420,10 +1420,10 @@
     "@nodelib/fs.scandir" "2.1.5"
     fastq "^1.6.0"
 
-"@react-native-async-storage/async-storage@^2.1.2":
-  version "2.1.2"
-  resolved "https://registry.npmjs.org/@react-native-async-storage/async-storage/-/async-storage-2.1.2.tgz"
-  integrity sha512-dvlNq4AlGWC+ehtH12p65+17V0Dx7IecOWl6WanF2ja38O1Dcjjvn7jVzkUHJ5oWkQBlyASurTPlTHgKXyYiow==
+"@react-native-async-storage/async-storage@^2.2.0":
+  version "2.2.0"
+  resolved "https://registry.npmjs.org/@react-native-async-storage/async-storage/-/async-storage-2.2.0.tgz"
+  integrity sha512-gvRvjR5JAaUZF8tv2Kcq/Gbt3JHwbKFYfmb445rhOj6NUMx3qPLixmDx5pZAyb9at1bYvJ4/eTUipU5aki45xw==
   dependencies:
     merge-options "^3.0.4"
 
@@ -1584,15 +1584,15 @@
   resolved "https://registry.npmjs.org/@react-native-community/masked-view/-/masked-view-0.1.11.tgz"
   integrity sha512-rQfMIGSR/1r/SyN87+VD8xHHzDYeHaJq6elOSCAD+0iLagXkSI2pfA0LmSXP21uw5i3em7GkkRjfJ8wpqWXZNw==
 
-"@react-native-documents/picker@^10.1.2":
-  version "10.1.2"
-  resolved "https://registry.npmjs.org/@react-native-documents/picker/-/picker-10.1.2.tgz"
-  integrity sha512-JzbFmFp0SmG0FEKt4Q62trewHMFpas2zAX0n5EANwrU9kondnzAEF7/xxz2EA2tfZNwnkHelqG8A7iedGleMRw==
+"@react-native-documents/picker@^10.1.7":
+  version "10.1.7"
+  resolved "https://registry.npmjs.org/@react-native-documents/picker/-/picker-10.1.7.tgz"
+  integrity sha512-Tb8SPU+pHxrSJmDHBozSUStIPeyFHTHLrU3MW0N3sUAioLd5z+nmUdypfg5fs+Yzp7KTxVW06APe2HLB1ysLww==
 
-"@react-native-picker/picker@^2.11.0":
-  version "2.11.0"
-  resolved "https://registry.npmjs.org/@react-native-picker/picker/-/picker-2.11.0.tgz"
-  integrity sha512-QuZU6gbxmOID5zZgd/H90NgBnbJ3VV6qVzp6c7/dDrmWdX8S0X5YFYgDcQFjE3dRen9wB9FWnj2VVdPU64adSg==
+"@react-native-picker/picker@^2.11.2":
+  version "2.11.2"
+  resolved "https://registry.npmjs.org/@react-native-picker/picker/-/picker-2.11.2.tgz"
+  integrity sha512-2zyFdW4jgHjF+NeuDZ4nl3hJ+8suey69bI3yljqhNyowfklW2NwNrdDUaJ2iwtPCpk2pt7834aPF8TI6iyZRhA==
 
 "@react-native/assets-registry@0.78.0":
   version "0.78.0"
@@ -5124,10 +5124,10 @@ loose-envify@^1.0.0, loose-envify@^1.4.0:
   dependencies:
     js-tokens "^3.0.0 || ^4.0.0"
 
-lottie-react-native@^7.2.2:
-  version "7.2.2"
-  resolved "https://registry.npmjs.org/lottie-react-native/-/lottie-react-native-7.2.2.tgz"
-  integrity sha512-pp3dnFVFZlfZzIL5qKGXju2d6RfnYhPbb8xQL9dYqvPbPy2EbnK2aFlv6jAZLYh0QjUGPEmRAgAAnsOOtT+H9Q==
+lottie-react-native@^7.3.4:
+  version "7.3.4"
+  resolved "https://registry.npmjs.org/lottie-react-native/-/lottie-react-native-7.3.4.tgz"
+  integrity sha512-XUh7eGFb7ID8JRdU6U4N4cYQeYmjtdQRvd8ZXJ6xrdSsn5gZD0c79ITOREPcwJg4YupBFHgyV1GXdAHQP+KYUQ==
 
 lru-cache@^5.1.1:
   version "5.1.1"
@@ -6050,14 +6050,15 @@ react-native-fs@^2.20.0:
     base-64 "^0.1.0"
     utf8 "^3.0.0"
 
-react-native-gesture-handler@^2.25.0, "react-native-gesture-handler@>= 2.0.0":
-  version "2.25.0"
-  resolved "https://registry.npmjs.org/react-native-gesture-handler/-/react-native-gesture-handler-2.25.0.tgz"
-  integrity sha512-NPjJi6mislXxvjxQPU9IYwBjb1Uejp8GvAbE1Lhh+xMIMEvmgAvVIp5cz1P+xAbV6uYcRRArm278+tEInGOqWg==
+react-native-gesture-handler@^2.28.0, "react-native-gesture-handler@>= 2.0.0":
+  version "2.28.0"
+  resolved "https://registry.npmjs.org/react-native-gesture-handler/-/react-native-gesture-handler-2.28.0.tgz"
+  integrity sha512-0msfJ1vRxXKVgTgvL+1ZOoYw3/0z1R+Ked0+udoJhyplC2jbVKIJ8Z1bzWdpQRCV3QcQ87Op0zJVE5DhKK2A0A==
   dependencies:
     "@egjs/hammerjs" "^2.0.17"
     hoist-non-react-statics "^3.3.0"
     invariant "^2.2.4"
+
 
 react-native-incall-manager@^4.2.1:
   version "4.2.1"
@@ -6083,10 +6084,10 @@ react-native-paper@^5.13.1:
     color "^3.1.2"
     use-latest-callback "^0.1.5"
 
-react-native-permissions@^5.3.0:
-  version "5.3.0"
-  resolved "https://registry.npmjs.org/react-native-permissions/-/react-native-permissions-5.3.0.tgz"
-  integrity sha512-krDaImQ7J8tm7P+GqKmTIkojNqdO0E6v2x7TOlX/7rRc/zlpoqRXsN7210ecChcUmEOJEH6wzPcemYq+7AfZiw==
+react-native-permissions@^5.4.2:
+  version "5.4.2"
+  resolved "https://registry.npmjs.org/react-native-permissions/-/react-native-permissions-5.4.2.tgz"
+  integrity sha512-XNMoG1fxrB9q73MLn/ZfTaP7pS8qPu0KWypbeFKVTvoR+JJ3O7uedMOTH/mts9bTG+GKhShOoZ+k0CR63q9jwA==
 
 react-native-ratings@8.0.4:
   version "8.0.4"
@@ -6095,10 +6096,10 @@ react-native-ratings@8.0.4:
   dependencies:
     lodash "^4.17.15"
 
-react-native-reanimated@^3.17.3:
-  version "3.17.3"
-  resolved "https://registry.npmjs.org/react-native-reanimated/-/react-native-reanimated-3.17.3.tgz"
-  integrity sha512-0dN+AB7Om9Fdq3Bvq4+ClGhv2sl1o6BhKum18CFNPh4dgMKybDSdRo2vhxTaZUJq6R3LC8gFI84IV0qCZmPbiw==
+react-native-reanimated@^3.19.1:
+  version "3.19.1"
+  resolved "https://registry.npmjs.org/react-native-reanimated/-/react-native-reanimated-3.19.1.tgz"
+  integrity sha512-ILL0FSNzSVIg6WuawrsMBvNxk2yJFiTUcahimXDAeNiE/09eagVUlHhYWXAAmH0umvAOafBaGjO7YfBhUrf5ZQ==
   dependencies:
     "@babel/plugin-transform-arrow-functions" "^7.0.0-0"
     "@babel/plugin-transform-class-properties" "^7.0.0-0"
@@ -6113,10 +6114,10 @@ react-native-reanimated@^3.17.3:
     invariant "^2.2.4"
     react-native-is-edge-to-edge "1.1.7"
 
-react-native-safe-area-context@*, react-native-safe-area-context@^5.3.0, "react-native-safe-area-context@>= 3.0.0", "react-native-safe-area-context@>= 4.0.0":
-  version "5.3.0"
-  resolved "https://registry.npmjs.org/react-native-safe-area-context/-/react-native-safe-area-context-5.3.0.tgz"
-  integrity sha512-glV9bwuozTjf/JDBIBm+ITnukHNaUT3nucgdeADwjtHsfEN3RL5UO6nq99vvdWv5j/O9yCZBvFncM1BBQ+UvpQ==
+react-native-safe-area-context@*, react-native-safe-area-context@^5.6.1, "react-native-safe-area-context@>= 3.0.0", "react-native-safe-area-context@>= 4.0.0":
+  version "5.6.1"
+  resolved "https://registry.npmjs.org/react-native-safe-area-context/-/react-native-safe-area-context-5.6.1.tgz"
+  integrity sha512-/wJE58HLEAkATzhhX1xSr+fostLsK8Q97EfpfMDKo8jlOc1QKESSX/FQrhk7HhQH/2uSaox4Y86sNaI02kteiA==
 
 react-native-screens@^4.11.1, "react-native-screens@>= 4.0.0":
   version "4.11.1"
