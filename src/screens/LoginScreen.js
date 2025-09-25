@@ -2,19 +2,15 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView,
-  KeyboardAvoidingView, Platform, Animated, Image, Easing, Alert
+  KeyboardAvoidingView, Platform, Animated, Image, Easing, Alert, Dimensions
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import LinearGradient from 'react-native-linear-gradient';
-import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-import SuccessDialog from '../components/SuccessDialog';
-import ErrorDialog from '../components/ErrorDialog';
 import { api } from '../lib/config';
 
-// 서버 주소: 에뮬레이터용은 10.0.2.2, 실제 기기/배포용은 EC2
-// const API_BASE = 'http://10.0.2.2:3000';
+// // 서버 주소: 에뮬레이터용은 10.0.2.2, 실제 기기/배포용은 EC2
+// // const API_BASE = 'http://10.0.2.2:3000';
 
 /* ====================== 에러 메시지 한글 변환 유틸 ====================== */
 const toKoreanBackendMessage = (data) => {
@@ -67,21 +63,17 @@ const toKoreanErrorMessage = (error) => {
 };
 /* ===================================================================== */
 
+// ✅ 화면 크기 기반 블롭 사이즈/위치
+const { width: W, height: H } = Dimensions.get('window');
+const BLOB_LT_SIZE = Math.max(W, H) * 0.9;   // 좌상단 큰 원
+const BLOB_RB_SIZE = Math.max(W, H) * 0.85;  // 우하단 큰 원
+
 const LoginScreen = ({ setIsLoggedIn, onLoginSuccess }) => {
   const navigation = useNavigation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  // 모달 상태
-  const [successOpen, setSuccessOpen] = useState(false);
-  const [errorOpen, setErrorOpen] = useState(false);
-  const [errorTitle, setErrorTitle] = useState('로그인 실패');
-  const [errorMsg, setErrorMsg] = useState('문제가 발생했습니다.');
-
-  // 성공 후 처리용 임시 저장
-  const [pendingToken, setPendingToken] = useState(null);
-  const [pendingPhone, setPendingPhone] = useState(null);
-
+  // ✅ 로그인 처리 (Alert로 성공/실패 표시) — 로직 그대로 유지
   const handleLogin = async () => {
     const trimmedEmail = email.trim();
     const trimmedPassword = password;
@@ -97,20 +89,17 @@ const LoginScreen = ({ setIsLoggedIn, onLoginSuccess }) => {
       const phone = response.data?.data?.phoneNumber;
 
       if (token) {
-        setPendingToken(token);
-        setPendingPhone(phone ?? null);
-        setSuccessOpen(true);
+        await AsyncStorage.setItem('token', token);
+        setIsLoggedIn(true);
+        onLoginSuccess?.(phone);
+        Alert.alert('로그인 성공', '환영합니다!');
       } else {
         const msg = toKoreanBackendMessage(response.data) || '서버에서 토큰을 받지 못했습니다.';
-        setErrorTitle('로그인 실패');
-        setErrorMsg(msg);
-        setErrorOpen(true);
+        Alert.alert('로그인 실패', msg);
       }
     } catch (error) {
       const msg = toKoreanErrorMessage(error);
-      setErrorTitle('로그인 실패');
-      setErrorMsg(msg);
-      setErrorOpen(true);
+      Alert.alert('로그인 실패', msg);
     }
   };
 
@@ -133,6 +122,7 @@ const LoginScreen = ({ setIsLoggedIn, onLoginSuccess }) => {
 
   return (
     <SafeAreaView style={styles.safe}>
+      {/* ✅ 배경: 홈과 통일 (위→아래 어두워짐) */}
       <LinearGradient
         colors={['#20B2F3', '#5E73F7', '#0F1730']}
         locations={[0, 0.55, 1]}
@@ -141,27 +131,39 @@ const LoginScreen = ({ setIsLoggedIn, onLoginSuccess }) => {
         style={StyleSheet.absoluteFill}
         pointerEvents="none"
       />
+      {/* ✅ 큰 원(블롭) 2개: 좌상단 밝게 / 우하단 어둡게 */}
+      <View style={[styles.blob, styles.blobLT]} pointerEvents="none" />
+      <View style={[styles.blob, styles.blobRB]} pointerEvents="none" />
 
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <View style={styles.container} pointerEvents="box-none">
+          {/* 상단: 로고 + 이퀄라이저 */}
           <View style={styles.header}>
             <Image source={require('../assets/Detection.png')} style={styles.logo} resizeMode="contain" />
             <View style={styles.equalizer} pointerEvents="none">
               {bars.map((v, idx) => {
-                const h = v.interpolate({ inputRange: [0, 1], outputRange: [8, 44] });
+                const h = v.interpolate({ inputRange: [0, 1], outputRange: [10, 72] }); // ↑ 더 높게
                 return (
-                  <Animated.View
-                    key={idx}
-                    style={[
-                      styles.eqBar,
-                      { height: h, backgroundColor: idx % 2 ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.7)' },
-                    ]}
-                  />
+                  <View key={idx} style={styles.eqItem}>
+                    {/* 글로우 */}
+                    <Animated.View style={[styles.eqGlow, { height: Animated.add(h, 14) }]} />
+                    {/* 막대 */}
+                    <Animated.View
+                      style={[
+                        styles.eqBar,
+                        {
+                          height: h,
+                          backgroundColor: idx % 2 ? 'rgba(255,255,255,0.65)' : 'rgba(255,255,255,0.9)',
+                        },
+                      ]}
+                    />
+                  </View>
                 );
               })}
             </View>
           </View>
 
+          {/* 카드 제거 + 입력 박스 크게 */}
           <View style={styles.card}>
             <View style={styles.inputPill}>
               <TextInput
@@ -206,6 +208,7 @@ const LoginScreen = ({ setIsLoggedIn, onLoginSuccess }) => {
                 <Text style={styles.linkStrong}>회원가입</Text>
               </TouchableOpacity>
             </View>
+
             <View style={styles.bottomLinks}>
               <Text style={styles.linkDim}>비밀번호를 잊으셨나요? </Text>
               <TouchableOpacity onPress={() => navigation.navigate('PasswordRecovery')}>
@@ -215,63 +218,114 @@ const LoginScreen = ({ setIsLoggedIn, onLoginSuccess }) => {
           </View>
         </View>
       </KeyboardAvoidingView>
-
-      {/* 모달 */}
-      <SuccessDialog
-        visible={successOpen}
-        title="로그인 성공"
-        message="환영합니다!"
-        okText="OK"
-        onClose={async () => {
-          setSuccessOpen(false);
-          try {
-            if (pendingToken) {
-              await AsyncStorage.setItem('token', pendingToken);
-            }
-          } finally {
-            if (pendingPhone) onLoginSuccess?.(pendingPhone);
-            setIsLoggedIn(true);
-            setPendingToken(null);
-            setPendingPhone(null);
-          }
-        }}
-      />
-      <ErrorDialog
-        visible={errorOpen}
-        title={errorTitle}
-        message={errorMsg}
-        okText="확인"
-        onClose={() => setErrorOpen(false)}
-      />
     </SafeAreaView>
   );
 };
 
+/* ====================== styles ====================== */
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   safe: { flex: 1, backgroundColor: '#0A1430' },
-  container: { flex: 1, justifyContent: 'center', paddingHorizontal: 22 },
-  header: { alignItems: 'center', marginBottom: 18 },
-  logo: { width: 450, height: 280 },
-  equalizer: { height: 56, width: '82%', flexDirection: 'row', justifyContent: 'space-between' },
-  eqBar: { width: 8, borderRadius: 4 },
-  card: { backgroundColor: 'transparent', borderWidth: 0, padding: 0, shadowOpacity: 0, elevation: 0 },
-  inputPill: {
-    height: 60, borderRadius: 30, backgroundColor: 'rgba(20, 32, 70, 0.95)',
-    paddingHorizontal: 18, justifyContent: 'center', marginBottom: 16,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.16)',
+
+  // ✅ 블롭 공통
+  blob: {
+    position: 'absolute',
+    borderRadius: 9999,
   },
-  pillText: { color: '#F2F7FF', fontSize: 17 },
+  blobLT: {
+    width: BLOB_LT_SIZE,
+    height: BLOB_LT_SIZE,
+    top: -BLOB_LT_SIZE * 0.25,
+    left: -BLOB_LT_SIZE * 0.15,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  blobRB: {
+    width: BLOB_RB_SIZE,
+    height: BLOB_RB_SIZE,
+    bottom: -BLOB_RB_SIZE * 0.25,
+    right: -BLOB_RB_SIZE * 0.2,
+    backgroundColor: 'rgba(0,0,0,0.18)',
+  },
+
+  container: { flex: 1, justifyContent: 'center', paddingHorizontal: 22 },
+
+  // 로고와 이퀄라이저 간격을 좁혀 임팩트 강화
+  header: { alignItems: 'center', marginBottom: 16 },
+  logo: { width: 500, height: 280 },
+
+  // 이퀄라이저를 더 크게/가깝게
+  equalizer: {
+    height: 72,
+    width: '88%',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 0,
+    marginBottom: 8,
+  },
+
+  // 각 막대 컨테이너(그림자/글로우용)
+  eqItem: {
+    width: 10,                // 막대 두께 ↑
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    marginHorizontal: 3,      // 간격 ↑
+    position: 'relative',
+  },
+  eqBar: { width: '100%', borderRadius: 6 }, // 둥글기 강화
+  eqGlow: {
+    position: 'absolute',
+    bottom: -4,
+    width: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(46,123,255,0.22)',
+    shadowColor: '#2E7BFF',
+    shadowOpacity: 0.55,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
+  },
+
+  /* 🔹 카드 상자 비주얼 제거 */
+  card: {
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    padding: 0,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+
+  /* 🔹 입력 박스 크게 */
+  inputPill: {
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(20, 32, 70, 0.95)',
+    paddingHorizontal: 18,
+    justifyContent: 'center',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
+  },
+  pillText: {
+    color: '#F2F7FF',
+    fontSize: 17,
+  },
+
   cta: {
-    marginTop: 10, borderRadius: 28, overflow: 'hidden',
-    shadowColor: '#1A73E8', shadowOpacity: 0.45, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 6,
+    marginTop: 10,
+    borderRadius: 28,
+    overflow: 'hidden',
+    shadowColor: '#1A73E8',
+    shadowOpacity: 0.45,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
   },
   ctaInner: { height: 54, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
   ctaText: { color: '#fff', fontWeight: '900', letterSpacing: 0.5, fontSize: 16 },
+
   bottomLinks: { marginTop: 14, flexDirection: 'row', justifyContent: 'center' },
   linkDim: { color: '#A9C1F6' },
   linkStrong: { color: '#FFFFFF', fontWeight: '800' },
 });
 
 export default LoginScreen;
-
