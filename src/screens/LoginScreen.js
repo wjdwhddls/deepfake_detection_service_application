@@ -30,8 +30,8 @@ const toKoreanErrorMessage = (error) => {
     const { status, data } = error.response;
     const raw =
       typeof data === 'string' ? data :
-      (Array.isArray(data) ? data.join(', ') :
-      (data?.message || null));
+        (Array.isArray(data) ? data.join(', ') :
+          (data?.message || null));
 
     const dict = {
       'Invalid credentials': '이메일 또는 비밀번호가 올바르지 않습니다.',
@@ -206,9 +206,12 @@ const LoginScreen = ({ setIsLoggedIn, onLoginSuccess }) => {
                 <Text style={styles.linkStrong}>회원가입</Text>
               </TouchableOpacity>
             </View>
-            <TouchableOpacity onPress={() => navigation.navigate('PasswordRecovery')}>
-              <Text style={[styles.linkDim, { textAlign: 'center', marginTop: 8 }]}>비밀번호를 잊으셨나요?</Text>
-            </TouchableOpacity>
+            <View style={styles.bottomLinks}>
+              <Text style={styles.linkDim}>비밀번호를 잊으셨나요? </Text>
+              <TouchableOpacity onPress={() => navigation.navigate('PasswordRecovery')}>
+                <Text style={styles.linkStrong}>비밀번호 찾기</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -249,7 +252,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#0A1430' },
   container: { flex: 1, justifyContent: 'center', paddingHorizontal: 22 },
   header: { alignItems: 'center', marginBottom: 18 },
-  logo: { width: 280, height: 126, marginBottom: 12 },
+  logo: { width: 450, height: 280 },
   equalizer: { height: 56, width: '82%', flexDirection: 'row', justifyContent: 'space-between' },
   eqBar: { width: 8, borderRadius: 4 },
   card: { backgroundColor: 'transparent', borderWidth: 0, padding: 0, shadowOpacity: 0, elevation: 0 },
@@ -271,3 +274,4 @@ const styles = StyleSheet.create({
 });
 
 export default LoginScreen;
+
