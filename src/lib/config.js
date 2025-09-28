@@ -3,7 +3,7 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // ✅ 배포(EC2) 주소만 사용 (http:// 포함 필수)
-export const API_BASE   = 'http://ec2-13-125-2-122.ap-northeast-2.compute.amazonaws.com';
+export const API_BASE = 'http://ec2-43-200-224-84.ap-northeast-2.compute.amazonaws.com:3000';
 export const SERVER_URL = API_BASE; // socket.io도 같은 호스트 사용
 
 export const api = axios.create({
