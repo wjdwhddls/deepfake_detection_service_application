@@ -9,15 +9,21 @@ import {
   Vibration,
   Platform,
   SafeAreaView,
-  Dimensions,
+  useWindowDimensions,
   Animated,
   Easing,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useTheme } from '../contexts/ThemeContext';
 
-const { width: SCREEN_W } = Dimensions.get('window');
-const KEY_SIZE = Math.min(86, Math.max(72, SCREEN_W * 0.24)); // 화면에 맞춘 유동 크기
+// 유틸
+const clamp = (v, min, max) => Math.max(min, Math.min(v, max));
+
+// 그리드 상수
+const KEYS_GAP = 14;           // 키 간 간격(열/행 간)
+const CARD_SIDE_PADDING = 12;  // 카드 좌우 패딩
+const COLS = 3;
+const ROWS = 4;
 
 const KEYS = [
   { k: '1', letters: '' },
@@ -29,9 +35,9 @@ const KEYS = [
   { k: '7', letters: 'PQRS' },
   { k: '8', letters: 'TUV' },
   { k: '9', letters: 'WXYZ' },
-  { k: '*', letters: ' ' },
+  { k: '*', letters: '' },
   { k: '0', letters: '+' }, // 길게 누르면 + 입력
-  { k: '#', letters: ' ' },
+  { k: '#', letters: '' },
 ];
 
 // 한국 번호 포맷터
@@ -62,7 +68,7 @@ function formatMask000_0000_0000(digits) {
 
 // 테마 토큰(배경은 CallScreen 고정값 사용)
 const getThemeTokens = (isLight) => ({
-  safeBg: isLight ? '#000' : '#000', // 그라데이션 아래쪽 베이스(보이지 않음)
+  safeBg: isLight ? '#000' : '#000',
   cardBg: isLight ? 'rgba(255,255,255,0.65)' : 'rgba(255,255,255,0.08)',
   border: isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.18)',
   text: isLight ? '#111827' : '#FFFFFF',
@@ -71,15 +77,12 @@ const getThemeTokens = (isLight) => ({
   ripple: isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.18)',
 });
 
-const CALL_BG_COLORS = ['#0ea5e9', '#6366f1', '#111827']; // CallScreen과 동일
-const ANIMATE_BLOBS = true; // 애니메이션 끄고 싶으면 false
+const CALL_BG_COLORS = ['#0ea5e9', '#6366f1', '#111827'];
+const ANIMATE_BLOBS = true;
 
 const getStyles = (t) =>
   StyleSheet.create({
-    safe: {
-      flex: 1,
-      backgroundColor: t.safeBg,
-    },
+    safe: { flex: 1, backgroundColor: t.safeBg },
     screen: {
       flex: 1,
       paddingHorizontal: 16,
@@ -88,10 +91,9 @@ const getStyles = (t) =>
       justifyContent: 'center',
     },
     card: {
-      width: '100%',
-      maxWidth: 440,
+      // width는 런타임에서 주입(반응형)
       paddingVertical: 16,
-      paddingHorizontal: 12,
+      paddingHorizontal: CARD_SIDE_PADDING,
       backgroundColor: t.cardBg,
       borderWidth: 1,
       borderColor: t.border,
@@ -103,58 +105,45 @@ const getStyles = (t) =>
           shadowOpacity: 0.35,
           shadowRadius: 16,
         },
-        android: {
-          elevation: 0.1,
-        },
+        android: { elevation: 0.1 },
       }),
     },
     display: {
       position: 'relative',
-      minHeight: 64,
+      // minHeight는 동적으로 주입
       alignItems: 'center',
       justifyContent: 'center',
-      paddingRight: 56,
+      paddingRight: 56, // 아이콘 버튼 영역 확보
       paddingLeft: 16,
       marginBottom: 8,
     },
     displayText: {
       color: t.text,
-      fontSize: 28,
+      // fontSize는 동적으로 주입
       letterSpacing: 1.1,
       textAlign: 'center',
     },
-    placeholder: {
-      color: t.placeholder,
-      opacity: 0.8,
-    },
+    placeholder: { color: t.placeholder, opacity: 0.8 },
     iconBtn: {
       position: 'absolute',
       right: 8,
       top: '50%',
-      marginTop: -22,
-      width: 44,
-      height: 44,
-      borderRadius: 22,
+      // width/height/borderRadius/marginTop은 동적으로 주입
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: t.keyBg,
       borderWidth: 1,
       borderColor: t.border,
     },
-    iconBtnPressed: {
-      transform: [{ scale: 0.97 }],
-    },
-    iconText: {
-      color: '#FCA5A5',
-      fontSize: 20,
-    },
+    iconBtnPressed: { transform: [{ scale: 0.97 }] },
+    iconText: { color: '#FCA5A5' /* fontSize는 동적으로 주입 */ },
     keys: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      justifyContent: 'space-between',
-      rowGap: 14,
-      paddingHorizontal: 12,
+      alignSelf: 'center',
       paddingTop: 6,
+    },
+    row: {
+      flexDirection: 'row',
+      alignSelf: 'center',
     },
     key: {
       alignItems: 'center',
@@ -164,59 +153,73 @@ const getStyles = (t) =>
       borderColor: t.border,
       overflow: 'hidden', // 안드로이드 리플 클리핑
     },
-    keyPressed: {
-      transform: [{ scale: 0.97 }],
-    },
-    digit: {
-      color: t.text,
-      fontSize: 26,
-      fontWeight: '700',
-      lineHeight: 28,
-    },
-    letters: {
-      color: t.text,
-      opacity: 0.6,
-      fontSize: 11,
-      letterSpacing: 1.4,
-      marginTop: 6,
-    },
-    bottom: {
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingVertical: 14,
-    },
+    keyPressed: { transform: [{ scale: 0.97 }] },
+    digit: { color: t.text /* fontSize는 동적으로 주입 */, fontWeight: '700', lineHeight: undefined },
+    letters: { color: t.text, opacity: 0.6 /* fontSize는 동적으로 주입 */, letterSpacing: 1.4, marginTop: 6 },
+    bottom: { alignItems: 'center', justifyContent: 'center', paddingVertical: 14 },
     callBtn: {
-      width: 72,
-      height: 72,
-      borderRadius: 36,
+      // 크기는 런타임에서 주입(반응형)
       alignItems: 'center',
       justifyContent: 'center',
+      borderRadius: 36,
       overflow: 'hidden',
     },
-    callBtnGradient: {
-      ...StyleSheet.absoluteFillObject,
-      borderRadius: 36,
-    },
-    callBtnPressed: {
-      transform: [{ scale: 0.96 }],
-      opacity: 0.95,
-    },
-    callIcon: {
-      fontSize: 24,
-      color: '#fff',
-    },
-
-    // CallScreen 배경 블롭
-    blob: {
-      position: 'absolute',
-      borderRadius: 999,
-    },
+    callBtnGradient: { ...StyleSheet.absoluteFillObject, borderRadius: 36 },
+    callBtnPressed: { transform: [{ scale: 0.96 }], opacity: 0.95 },
+    callIcon: { color: '#fff' /* fontSize는 동적으로 주입 */ },
+    blob: { position: 'absolute', borderRadius: 999 },
   });
 
 export default function Dialer({ onStartCall }) {
   const { isLightMode } = useTheme();
   const t = useMemo(() => getThemeTokens(isLightMode), [isLightMode]);
   const styles = useMemo(() => getStyles(t), [t]);
+
+  // 창 크기 기반 반응형 치수
+  const { width: W, height: H } = useWindowDimensions();
+  const shortest = Math.min(W, H);
+  const isTablet = shortest >= 600;
+  const AR = H / W; // 화면 비율(>1: 세로로 김)
+
+  // 카드 너비: 폰은 최대 440, 태블릿은 최대 640. 화면 여백 32 유지.
+  const CARD_W = useMemo(() => {
+    const margin = 32;
+    const maxW = isTablet ? 640 : 440;
+    return Math.min(maxW, W - margin);
+  }, [W, isTablet]);
+
+  // 키 크기 계산(가로/세로 제약 모두 고려)
+  const KEY_SIZE = useMemo(() => {
+    // 가로 제한: 카드 내부 3열 + 2 간격이 딱 맞게
+    const innerW = CARD_W - CARD_SIDE_PADDING * 2;
+    const keyW = Math.floor((innerW - 2 * KEYS_GAP) / 3);
+
+    // 세로 제한: 화면 높이의 일정 비율 내에서 4행 + 3 간격이 들어가도록
+    // 세로가 긴(AR↑) 기기에는 조금 더 크게, 짧은(AR↓) 기기에는 조금 작게 배분
+    const gridShare = clamp(0.40 + (AR - 1.7) * 0.06, 0.34, isTablet ? 0.52 : 0.46);
+    const targetGridH = H * gridShare;
+    const keyH = Math.floor((targetGridH - (ROWS - 1) * KEYS_GAP) / ROWS);
+
+    // 상한/하한
+    const upper = isTablet ? 110 : 92;
+    const lower = 48; // 너무 작아지지 않도록 가독 하한
+    return clamp(Math.min(keyW, keyH), lower, upper);
+  }, [CARD_W, H, AR, isTablet]);
+
+  // 키 그리드 총 너비(정확히 3개 + 2개 간격)
+  const KEY_GRID_W = useMemo(() => KEY_SIZE * 3 + KEYS_GAP * 2, [KEY_SIZE]);
+
+  // 통화 버튼(키 크기에 비례)
+  const CALL_BTN_SIZE = Math.round(clamp(KEY_SIZE * 0.85, 42, isTablet ? 88 : 78));
+
+  // 표시창/아이콘/폰트 동적 스케일
+  const DISPLAY_MIN_H = Math.round(clamp(KEY_SIZE * 1.0, 56, 96));
+  const DISPLAY_FS = Math.round(clamp(KEY_SIZE * 0.46, 22, 34));
+  const ICON_BTN_SIZE = Math.round(clamp(KEY_SIZE * 0.66, 36, 54));
+  const ICON_FS = Math.round(clamp(KEY_SIZE * 0.28, 18, 22));
+  const DIGIT_FS = Math.round(clamp(KEY_SIZE * 0.38, 20, 32));
+  const LETTER_FS = Math.round(clamp(KEY_SIZE * 0.16, 9, 13));
+  const CALL_ICON_FS = Math.round(clamp(KEY_SIZE * 0.30, 20, 28));
 
   // 입력 상태
   const [value, setValue] = useState('');
@@ -310,13 +313,21 @@ export default function Dialer({ onStartCall }) {
   const b2TX = blob2.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, -8, 0] });
   const b2Opacity = blob2.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.26, 0.36, 0.26] });
 
-  // 애니메이션을 끄면 초기 상태로 고정
   const blob1Style = ANIMATE_BLOBS
     ? { transform: [{ translateX: b1TX }, { translateY: b1TY }, { scale: b1Scale }], opacity: b1Opacity }
     : { opacity: 0.35 };
   const blob2Style = ANIMATE_BLOBS
     ? { transform: [{ translateX: b2TX }, { translateY: b2TY }, { scale: b2Scale }], opacity: b2Opacity }
     : { opacity: 0.30 };
+
+  // 3×4 행 구성
+  const rows = useMemo(() => {
+    const out = [];
+    for (let r = 0; r < ROWS; r++) {
+      out.push(KEYS.slice(r * COLS, r * COLS + COLS));
+    }
+    return out;
+  }, []);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -333,13 +344,7 @@ export default function Dialer({ onStartCall }) {
         pointerEvents="none"
         style={[
           styles.blob,
-          {
-            top: 120,
-            left: -40,
-            width: 220,
-            height: 220,
-            backgroundColor: 'rgba(34,211,238,0.35)',
-          },
+          { top: 120, left: -40, width: 220, height: 220, backgroundColor: 'rgba(34,211,238,0.35)' },
           blob1Style,
         ]}
       />
@@ -347,24 +352,18 @@ export default function Dialer({ onStartCall }) {
         pointerEvents="none"
         style={[
           styles.blob,
-          {
-            bottom: 140,
-            right: -60,
-            width: 280,
-            height: 280,
-            backgroundColor: 'rgba(167,139,250,0.30)',
-          },
+          { bottom: 140, right: -60, width: 280, height: 280, backgroundColor: 'rgba(167,139,250,0.30)' },
           blob2Style,
         ]}
       />
 
       <View style={styles.screen}>
-        {/* 카드(Blur 없음) */}
-        <View style={styles.card}>
+        {/* 카드(반응형 너비 적용) */}
+        <View style={[styles.card, { width: CARD_W }]}>
           {/* 표시창 */}
-          <View style={styles.display}>
+          <View style={[styles.display, { minHeight: DISPLAY_MIN_H }]}>
             <Text
-              style={[styles.displayText, !value && styles.placeholder]}
+              style={[styles.displayText, { fontSize: DISPLAY_FS }, !value && styles.placeholder]}
               numberOfLines={2}
               ellipsizeMode="tail"
             >
@@ -380,49 +379,86 @@ export default function Dialer({ onStartCall }) {
               onLongPress={clearAll}
               delayLongPress={600}
               android_ripple={{ color: t.ripple, borderless: true }}
-              style={({ pressed }) => [styles.iconBtn, pressed && styles.iconBtnPressed]}
+              style={({ pressed }) => [
+                styles.iconBtn,
+                pressed && styles.iconBtnPressed,
+                {
+                  width: ICON_BTN_SIZE,
+                  height: ICON_BTN_SIZE,
+                  borderRadius: ICON_BTN_SIZE / 2,
+                  marginTop: -ICON_BTN_SIZE / 2, // 수직 중앙 정렬
+                },
+              ]}
             >
-              <Text style={styles.iconText}>⌫</Text>
+              <Text style={[styles.iconText, { fontSize: ICON_FS }]}>⌫</Text>
             </Pressable>
           </View>
 
-          {/* 키패드 3x4 */}
-          <View style={styles.keys}>
-            {KEYS.map(({ k, letters }) => {
-              const isZero = k === '0';
-              return (
-                <Pressable
-                  key={k}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${k}${letters ? ' ' + letters : ''}`}
-                  onPress={() => append(k)}
-                  onLongPress={() => isZero && append('+')}
-                  delayLongPress={450}
-                  android_ripple={{ color: t.ripple, borderless: true }}
-                  style={({ pressed }) => [
-                    styles.key,
-                    pressed && styles.keyPressed,
-                    { width: KEY_SIZE, height: KEY_SIZE, borderRadius: KEY_SIZE / 2 },
-                  ]}
-                >
-                  <Text style={styles.digit}>{k}</Text>
-                  {letters ? <Text style={styles.letters}>{letters}</Text> : null}
-                </Pressable>
-              );
-            })}
+          {/* 키패드 3x4 — 고정 레이아웃, 동적 스케일 */}
+          <View style={[styles.keys, { width: KEY_GRID_W }]}>
+            {rows.map((rowKeys, rIdx) => (
+              <View
+                key={`row-${rIdx}`}
+                style={[
+                  styles.row,
+                  {
+                    width: KEY_GRID_W,
+                    marginBottom: rIdx === ROWS - 1 ? 0 : KEYS_GAP,
+                  },
+                ]}
+              >
+                {rowKeys.map(({ k, letters }, cIdx) => {
+                  const isZero = k === '0';
+                  const isLastCol = cIdx === COLS - 1;
+                  const hasLetters = typeof letters === 'string' && letters.trim().length > 0;
+
+                  return (
+                    <Pressable
+                      key={k}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${k}${hasLetters ? ' ' + letters : ''}`}
+                      onPress={() => append(k)}
+                      onLongPress={() => isZero && append('+')}
+                      delayLongPress={450}
+                      android_ripple={{ color: t.ripple, borderless: true }}
+                      style={({ pressed }) => [
+                        styles.key,
+                        pressed && styles.keyPressed,
+                        {
+                          width: KEY_SIZE,
+                          height: KEY_SIZE,
+                          borderRadius: KEY_SIZE / 2,
+                          marginRight: isLastCol ? 0 : KEYS_GAP,
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.digit, { fontSize: DIGIT_FS, lineHeight: DIGIT_FS + 2 }]}>{k}</Text>
+                      {hasLetters ? <Text style={[styles.letters, { fontSize: LETTER_FS }]}>{letters}</Text> : null}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ))}
           </View>
 
-          {/* 통화 버튼(그라데이션 유지) */}
+          {/* 통화 버튼(키 크기에 맞춰 반응형) */}
           <View style={styles.bottom}>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="전화 걸기"
               onPress={onCall}
               android_ripple={{ color: t.ripple, borderless: true }}
-              style={({ pressed }) => [styles.callBtn, pressed && styles.callBtnPressed]}
+              style={({ pressed }) => [
+                styles.callBtn,
+                { width: CALL_BTN_SIZE, height: CALL_BTN_SIZE, borderRadius: CALL_BTN_SIZE / 2 },
+                pressed && styles.callBtnPressed,
+              ]}
             >
-              <LinearGradient colors={['#34D399', '#10B981']} style={styles.callBtnGradient} />
-              <Text style={styles.callIcon}>📞</Text>
+              <LinearGradient
+                colors={['#34D399', '#10B981']}
+                style={[styles.callBtnGradient, { borderRadius: CALL_BTN_SIZE / 2 }]}
+              />
+              <Text style={[styles.callIcon, { fontSize: CALL_ICON_FS }]}>📞</Text>
             </Pressable>
           </View>
         </View>
