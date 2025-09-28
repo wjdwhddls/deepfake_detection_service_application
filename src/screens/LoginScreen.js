@@ -208,10 +208,7 @@ const LoginScreen = ({ setIsLoggedIn, onLoginSuccess }) => {
                 <Text style={styles.linkStrong}>회원가입</Text>
               </TouchableOpacity>
             </View>
-<<<<<<< Updated upstream
 
-=======
->>>>>>> Stashed changes
             <View style={styles.bottomLinks}>
               <Text style={styles.linkDim}>비밀번호를 잊으셨나요? </Text>
               <TouchableOpacity onPress={() => navigation.navigate('PasswordRecovery')}>
@@ -229,24 +226,11 @@ const LoginScreen = ({ setIsLoggedIn, onLoginSuccess }) => {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   safe: { flex: 1, backgroundColor: '#0A1430' },
-<<<<<<< Updated upstream
 
   // ✅ 블롭 공통
   blob: {
     position: 'absolute',
     borderRadius: 9999,
-=======
-  container: { flex: 1, justifyContent: 'center', paddingHorizontal: 22 },
-  header: { alignItems: 'center', marginBottom: 18 },
-  logo: { width: 450, height: 280 },
-  equalizer: { height: 56, width: '82%', flexDirection: 'row', justifyContent: 'space-between' },
-  eqBar: { width: 8, borderRadius: 4 },
-  card: { backgroundColor: 'transparent', borderWidth: 0, padding: 0, shadowOpacity: 0, elevation: 0 },
-  inputPill: {
-    height: 60, borderRadius: 30, backgroundColor: 'rgba(20, 32, 70, 0.95)',
-    paddingHorizontal: 18, justifyContent: 'center', marginBottom: 16,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.16)',
->>>>>>> Stashed changes
   },
   blobLT: {
     width: BLOB_LT_SIZE,
@@ -345,4 +329,3 @@ const styles = StyleSheet.create({
 });
 
 export default LoginScreen;
-
