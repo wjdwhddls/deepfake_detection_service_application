@@ -89,7 +89,7 @@ const LoginScreen = ({ setIsLoggedIn, onLoginSuccess }) => {
       const phone = response.data?.data?.phoneNumber;
 
       if (token) {
-        await AsyncStorage.setItem('token', token);
+        await AsyncStorage.setItem('access_token', token);
         setIsLoggedIn(true);
         onLoginSuccess?.(phone);
         Alert.alert('로그인 성공', '환영합니다!');
