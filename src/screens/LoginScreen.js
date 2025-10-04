@@ -9,8 +9,14 @@ import LinearGradient from 'react-native-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../lib/config';
 
-// // 서버 주소: 에뮬레이터용은 10.0.2.2, 실제 기기/배포용은 EC2
-// // const API_BASE = 'http://10.0.2.2:3000';
+/* ====================== Alert 안전 문자열 변환 ====================== */
+const ensureString = (val) => {
+  if (typeof val === 'string') return val;
+  if (Array.isArray(val)) return val.join(', ');
+  if (val == null) return '';
+  try { return JSON.stringify(val); } catch { return String(val); }
+};
+/* ================================================================== */
 
 /* ====================== 에러 메시지 한글 변환 유틸 ====================== */
 const toKoreanBackendMessage = (data) => {
@@ -73,7 +79,7 @@ const LoginScreen = ({ setIsLoggedIn, onLoginSuccess }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  // ✅ 로그인 처리 (Alert로 성공/실패 표시) — 로직 그대로 유지
+  // ✅ 로그인 처리 (Alert로 성공/실패 표시)
   const handleLogin = async () => {
     const trimmedEmail = email.trim();
     const trimmedPassword = password;
@@ -92,13 +98,13 @@ const LoginScreen = ({ setIsLoggedIn, onLoginSuccess }) => {
         await AsyncStorage.setItem('access_token', token);
         setIsLoggedIn(true);
         onLoginSuccess?.(phone);
-        Alert.alert('로그인 성공', '환영합니다!');
+        Alert.alert('로그인 성공', ensureString('환영합니다!'));
       } else {
-        const msg = toKoreanBackendMessage(response.data) || '서버에서 토큰을 받지 못했습니다.';
+        const msg = ensureString(toKoreanBackendMessage(response.data) || '서버에서 토큰을 받지 못했습니다.');
         Alert.alert('로그인 실패', msg);
       }
     } catch (error) {
-      const msg = toKoreanErrorMessage(error);
+      const msg = ensureString(toKoreanErrorMessage(error));
       Alert.alert('로그인 실패', msg);
     }
   };
@@ -142,19 +148,14 @@ const LoginScreen = ({ setIsLoggedIn, onLoginSuccess }) => {
             <Image source={require('../assets/Detection.png')} style={styles.logo} resizeMode="contain" />
             <View style={styles.equalizer} pointerEvents="none">
               {bars.map((v, idx) => {
-                const h = v.interpolate({ inputRange: [0, 1], outputRange: [10, 72] }); // ↑ 더 높게
+                const h = v.interpolate({ inputRange: [0, 1], outputRange: [10, 72] });
                 return (
                   <View key={idx} style={styles.eqItem}>
-                    {/* 글로우 */}
                     <Animated.View style={[styles.eqGlow, { height: Animated.add(h, 14) }]} />
-                    {/* 막대 */}
                     <Animated.View
                       style={[
                         styles.eqBar,
-                        {
-                          height: h,
-                          backgroundColor: idx % 2 ? 'rgba(255,255,255,0.65)' : 'rgba(255,255,255,0.9)',
-                        },
+                        { height: h, backgroundColor: idx % 2 ? 'rgba(255,255,255,0.65)' : 'rgba(255,255,255,0.9)' },
                       ]}
                     />
                   </View>
@@ -249,11 +250,9 @@ const styles = StyleSheet.create({
 
   container: { flex: 1, justifyContent: 'center', paddingHorizontal: 22 },
 
-  // 로고와 이퀄라이저 간격을 좁혀 임팩트 강화
   header: { alignItems: 'center', marginBottom: 16 },
   logo: { width: 500, height: 280 },
 
-  // 이퀄라이저를 더 크게/가깝게
   equalizer: {
     height: 72,
     width: '88%',
@@ -263,15 +262,14 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
 
-  // 각 막대 컨테이너(그림자/글로우용)
   eqItem: {
-    width: 10,                // 막대 두께 ↑
+    width: 10,
     alignItems: 'center',
     justifyContent: 'flex-end',
-    marginHorizontal: 3,      // 간격 ↑
+    marginHorizontal: 3,
     position: 'relative',
   },
-  eqBar: { width: '100%', borderRadius: 6 }, // 둥글기 강화
+  eqBar: { width: '100%', borderRadius: 6 },
   eqGlow: {
     position: 'absolute',
     bottom: -4,
@@ -285,7 +283,6 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
 
-  /* 🔹 카드 상자 비주얼 제거 */
   card: {
     backgroundColor: 'transparent',
     borderWidth: 0,
@@ -294,7 +291,6 @@ const styles = StyleSheet.create({
     elevation: 0,
   },
 
-  /* 🔹 입력 박스 크게 */
   inputPill: {
     height: 60,
     borderRadius: 30,
