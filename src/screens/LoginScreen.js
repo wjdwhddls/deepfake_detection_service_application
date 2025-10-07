@@ -9,6 +9,15 @@ import LinearGradient from 'react-native-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../lib/config';
 
+/* ====================== Alert 안전 문자열 변환 ====================== */
+const ensureString = (val) => {
+  if (typeof val === 'string') return val;
+  if (Array.isArray(val)) return val.join(', ');
+  if (val == null) return '';
+  try { return JSON.stringify(val); } catch { return String(val); }
+};
+/* ================================================================== */
+
 /* ====================== 에러 메시지 한글 변환 유틸 ====================== */
 // 항상 "문자열"을 반환하도록 보강
 const toKoreanBackendMessage = (data) => {
@@ -83,7 +92,7 @@ const LoginScreen = ({ setIsLoggedIn, onLoginSuccess }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  // 로그인 처리
+  // ✅ 로그인 처리 (Alert로 성공/실패 표시)
   const handleLogin = async () => {
     const trimmedEmail = email.trim();
     const trimmedPassword = password;
@@ -99,17 +108,17 @@ const LoginScreen = ({ setIsLoggedIn, onLoginSuccess }) => {
       const phone = response.data?.data?.phoneNumber;
 
       if (token) {
-        await AsyncStorage.setItem('token', token);
+        await AsyncStorage.setItem('access_token', token);
         setIsLoggedIn(true);
         onLoginSuccess?.(phone);
-        Alert.alert('로그인 성공', '환영합니다!');
+        Alert.alert('로그인 성공', ensureString('환영합니다!'));
       } else {
-        const msg = toKoreanBackendMessage(response.data) || '서버에서 토큰을 받지 못했습니다.';
-        Alert.alert('로그인 실패', String(msg));
+        const msg = ensureString(toKoreanBackendMessage(response.data) || '서버에서 토큰을 받지 못했습니다.');
+        Alert.alert('로그인 실패', msg);
       }
     } catch (error) {
-      const msg = toKoreanErrorMessage(error);
-      Alert.alert('로그인 실패', String(msg));
+      const msg = ensureString(toKoreanErrorMessage(error));
+      Alert.alert('로그인 실패', msg);
     }
   };
 
@@ -158,10 +167,7 @@ const LoginScreen = ({ setIsLoggedIn, onLoginSuccess }) => {
                     <Animated.View
                       style={[
                         styles.eqBar,
-                        {
-                          height: h,
-                          backgroundColor: idx % 2 ? 'rgba(255,255,255,0.65)' : 'rgba(255,255,255,0.9)',
-                        },
+                        { height: h, backgroundColor: idx % 2 ? 'rgba(255,255,255,0.65)' : 'rgba(255,255,255,0.9)' },
                       ]}
                     />
                   </View>
@@ -285,7 +291,13 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
 
-  card: { backgroundColor: 'transparent', borderWidth: 0, padding: 0, shadowOpacity: 0, elevation: 0 },
+  card: {
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    padding: 0,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
 
   inputPill: {
     height: 60,

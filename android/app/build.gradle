@@ -3,22 +3,17 @@ apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
 /**
- * This is the configuration block to customize your React Native Android app.
- * By default you don't need to apply any configuration, just uncomment the lines you need.
+ * React Native autolinking
  */
 react {
     /* Autolinking */
     autolinkLibrariesWithApp()
 }
 
-/**
- * Set this to true to Run Proguard on Release builds to minify the Java bytecode.
- */
+/** Run Proguard on Release builds? */
 def enableProguardInReleaseBuilds = false
 
-/**
- * The preferred build flavor of JavaScriptCore (JSC)
- */
+/** JSC flavor (Hermes 미사용 시) */
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
 android {
@@ -34,6 +29,7 @@ android {
         versionCode 1
         versionName "1.0"
     }
+
     signingConfigs {
         debug {
             storeFile file('debug.keystore')
@@ -41,13 +37,23 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+
+        // 🔒 릴리즈 서명(하드코딩)
+        release {
+            // keystore가 android/app 폴더에 있다고 가정
+            storeFile file('my-release-key.keystore')
+            storePassword 'kisook2557'
+            keyAlias 'my-key-alias'
+            keyPassword 'kisook2557'
+        }
     }
+
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
         release {
-            signingConfig signingConfigs.debug
+            signingConfig signingConfigs.release
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }
