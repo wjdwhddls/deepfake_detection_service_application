@@ -1,3 +1,4 @@
+// android/app/src/main/java/com/deepvoice/DeepfakeDetectorModule.kt
 package com.deepvoice
 
 import android.app.Activity
@@ -11,12 +12,13 @@ import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Build
+import android.util.Log
 import androidx.annotation.RequiresApi
 import com.facebook.react.bridge.*
 import com.facebook.react.modules.core.DeviceEventManagerModule
 import org.tensorflow.lite.Interpreter
-import org.tensorflow.lite.nnapi.NnApiDelegate
 import org.tensorflow.lite.support.common.FileUtil
+import org.tensorflow.lite.DataType
 import be.tarsos.dsp.util.fft.FFT
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -26,6 +28,9 @@ import java.util.concurrent.TimeUnit
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.floor
+import kotlin.math.abs
+import kotlin.math.ln
+import java.lang.Float.isFinite as JIsFinite  // static helper if needed
 
 class DeepfakeDetectorModule(private val reactCtx: ReactApplicationContext)
   : ReactContextBaseJavaModule(reactCtx), ActivityEventListener {
@@ -47,20 +52,30 @@ class DeepfakeDetectorModule(private val reactCtx: ReactApplicationContext)
 
   override fun getName(): String = "DeepfakeDetector"
 
+  // --- small helpers (avoid Kotlin stdlib isFinite() incompat) ---
+  private fun isFiniteF(x: Float): Boolean = !x.isNaN() && !x.isInfinite()
+  // ---------------------------------------------------------------
+
   // ===== Public API (JS) =====
 
   @ReactMethod
   fun initModel(promise: Promise) {
     try {
-      if (tflite != null) { promise.resolve(true); return }
+      if (tflite != null) { logModelIO(); promise.resolve(true); return }
       val mmap = FileUtil.loadMappedFile(reactCtx, MODEL_NAME)
-      val opt = Interpreter.Options()
-      opt.setNumThreads(4)
-      try { opt.addDelegate(NnApiDelegate()) } catch (_: Throwable) {}
+
+      // CPU only for stability
+      val opt = Interpreter.Options().apply { setNumThreads(4) }
       tflite = Interpreter(mmap, opt)
+
+      logModelIO()
       promise.resolve(true)
     } catch (e: Exception) {
+      Log.e("DeepfakeStep", "initModel failed", e)
       promise.reject("MODEL_LOAD_FAIL", e)
+    } catch (t: Throwable) {
+      Log.e("DeepfakeStep", "initModel failed (throwable)", t)
+      promise.reject("MODEL_LOAD_FAIL", t)
     }
   }
 
@@ -79,7 +94,11 @@ class DeepfakeDetectorModule(private val reactCtx: ReactApplicationContext)
       current.startActivity(Intent(current, PlaybackCaptureActivity::class.java))
       promise.resolve(true)
     } catch (e: Exception) {
+      Log.e("DeepfakeStep", "requestPlaybackCapture failed", e)
       promise.reject("REQ_CAPTURE_FAIL", e)
+    } catch (t: Throwable) {
+      Log.e("DeepfakeStep", "requestPlaybackCapture failed (throwable)", t)
+      promise.reject("REQ_CAPTURE_FAIL", t)
     }
   }
 
@@ -95,11 +114,18 @@ class DeepfakeDetectorModule(private val reactCtx: ReactApplicationContext)
 
       startPlaybackRecorder()
       monitoring = true
-      monitorThread = Thread { runInferenceLoop() }
+      monitorThread = Thread {
+        try { runInferenceLoop() }
+        catch (t: Throwable) { Log.e("DeepfakeStep", "runInferenceLoop crashed", t) }
+      }
       monitorThread?.start()
       promise.resolve(true)
     } catch (e: Exception) {
+      Log.e("DeepfakeStep", "startStreamMonitor failed", e)
       promise.reject("STREAM_START_FAIL", e)
+    } catch (t: Throwable) {
+      Log.e("DeepfakeStep", "startStreamMonitor failed (throwable)", t)
+      promise.reject("STREAM_START_FAIL", t)
     }
   }
 
@@ -113,24 +139,44 @@ class DeepfakeDetectorModule(private val reactCtx: ReactApplicationContext)
       pcmQueue.clear()
       promise.resolve(true)
     } catch (e: Exception) {
+      Log.e("DeepfakeStep", "stopStreamMonitor failed", e)
       promise.reject("STREAM_STOP_FAIL", e)
+    } catch (t: Throwable) {
+      Log.e("DeepfakeStep", "stopStreamMonitor failed (throwable)", t)
+      promise.reject("STREAM_STOP_FAIL", t)
     }
   }
 
   @ReactMethod
   fun detectFromFile(uriString: String, promise: Promise) {
     try {
+      Log.d("DeepfakeStep", "detectFromFile uri=$uriString")
       ensureModel()
-      val pcm: FloatArray = readWav16kMono(uriString)
-        ?: throw Exception("지원하지 않는 오디오 형식 (16kHz mono WAV만 지원)")
-      val input: Array<Array<FloatArray>> = computeCnnMFCC(pcm)
+
+      // 1) WAV load (PCM/16k/16bit; ch=1 or 2 → downmix)
+      val wav = readWav16kMono(uriString)
+        ?: throw Exception("지원하지 않는 오디오 형식 (16kHz, mono, 16-bit PCM WAV만 지원)")
+      Log.d("DeepfakeStep", "WAV loaded: samples=${wav.size}")
+
+      // 2) features → 224x224x3
+      val input: Array<Array<FloatArray>> = computeCnnMFCC(wav)
+      Log.d("DeepfakeStep", "MFCC->img done")
+
+      // 3) inference
       val prob: Float = runOnce(input)
+      Log.d("DeepfakeStep", "inference prob=$prob")
+
+      // 4) result
       val result = Arguments.createMap()
       result.putDouble("prob_real", prob.toDouble())
       result.putString("result", if (prob >= 0.5f) "진짜 음성" else "가짜 음성")
       promise.resolve(result)
     } catch (e: Exception) {
+      Log.e("DeepfakeStep", "detectFromFile failed", e)
       promise.reject("DETECT_FAIL", e)
+    } catch (t: Throwable) {
+      Log.e("DeepfakeStep", "detectFromFile failed (throwable)", t)
+      promise.reject("DETECT_FAIL", t)
     }
   }
 
@@ -176,18 +222,23 @@ class DeepfakeDetectorModule(private val reactCtx: ReactApplicationContext)
     recorder?.startRecording()
 
     captureThread = Thread {
-      val buf = ShortArray(2048)
-      while (recorder != null && recorder?.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
-        val n = recorder!!.read(buf, 0, buf.size)
-        if (n > 0) {
-          var i = 0
-          while (i + 2 < n) { // 48k → 16k decimate by 3
-            pcmQueue.offer(buf[i])
-            i += 3
+      try {
+        val buf = ShortArray(2048)
+        while (recorder != null && recorder?.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+          val n = recorder!!.read(buf, 0, buf.size)
+          if (n > 0) {
+            var i = 0
+            // 48k → 16k decimate by 3
+            while (i + 2 < n) {
+              pcmQueue.offer(buf[i])
+              i += 3
+            }
+          } else {
+            try { Thread.sleep(5) } catch (_: InterruptedException) {}
           }
-        } else {
-          try { Thread.sleep(5) } catch (_: InterruptedException) {}
         }
+      } catch (t: Throwable) {
+        Log.e("DeepfakeStep", "captureThread crashed", t)
       }
     }
     captureThread?.start()
@@ -259,66 +310,178 @@ class DeepfakeDetectorModule(private val reactCtx: ReactApplicationContext)
     if (tflite == null) throw IllegalStateException("Call initModel() first")
   }
 
-  private fun runOnce(input: Array<Array<FloatArray>>): Float {
+  /**
+   * 입력: 224x224x3 (HWC) float(0~1) 그레이 3채널
+   * 출력: [1,1] 또는 [1,2] (이진/소프트맥스 모두 허용)
+   */
+  private fun runOnce(inputHWC: Array<Array<FloatArray>>): Float {
     val interpreter = tflite ?: throw IllegalStateException("Model not initialized")
 
-    val inBuf: ByteBuffer = ByteBuffer
-      .allocateDirect(4 * 224 * 224 * 3)
-      .order(ByteOrder.nativeOrder())
+    val inTensor = interpreter.getInputTensor(0)
+    val inShape  = inTensor.shape()
+    val inType   = inTensor.dataType()
+    if (inType != DataType.FLOAT32) {
+      throw IllegalStateException("Model expects FLOAT32, got $inType")
+    }
+    if (inShape.size != 4 || inShape[1] != 224 || inShape[2] != 224 || inShape[3] != 3) {
+      interpreter.resizeInput(0, intArrayOf(1, 224, 224, 3))
+      interpreter.allocateTensors()
+    }
 
+    // fill input
+    val inBuf = ByteBuffer.allocateDirect(4 * 224 * 224 * 3).order(ByteOrder.nativeOrder())
     var i = 0
     while (i < 224) {
       var j = 0
       while (j < 224) {
-        var k = 0
-        while (k < 3) {
-          inBuf.putFloat(input[i][j][k])
-          k++
-        }
+        val px = inputHWC[i][j]
+        val r = if (!px[0].isNaN() && !px[0].isInfinite()) px[0].coerceIn(0f, 1f) else 0f
+        val g = if (!px[1].isNaN() && !px[1].isInfinite()) px[1].coerceIn(0f, 1f) else 0f
+        val b = if (!px[2].isNaN() && !px[2].isInfinite()) px[2].coerceIn(0f, 1f) else 0f
+        inBuf.putFloat(r); inBuf.putFloat(g); inBuf.putFloat(b)
         j++
       }
       i++
     }
-
-    val out: Array<FloatArray> = arrayOf(FloatArray(1))
     inBuf.rewind()
-    interpreter.run(inBuf, out)
-    return out[0][0]
+
+    // ==== 출력 shape에 맞춰 정확한 객체로 받기 ====
+    val outTensor = interpreter.getOutputTensor(0)
+    val outShape  = outTensor.shape()   // 예: [1,1] 또는 [1,2]
+    val rank = outShape.size
+
+    var prob = 0f
+    try {
+      when (rank) {
+        1 -> {
+          // 예: [1]
+          val out = FloatArray(outShape[0].coerceAtLeast(1))
+          interpreter.run(inBuf, out)
+          prob = out.getOrElse(if (out.size > 1) 1 else 0) { 0f }
+        }
+        2 -> {
+          // 예: [1,1] 또는 [1,2]
+          val out = Array(outShape[0]) { FloatArray(outShape[1]) }
+          interpreter.run(inBuf, out)
+          prob = if (outShape[1] == 1) out[0][0]
+                else out[0].getOrElse(1) { out[0][0] }
+        }
+        else -> {
+          // 일반화: 마지막 차원을 로짓으로 가정
+          val last = outShape.last()
+          val out = Array(outShape[0]) { FloatArray(last) }
+          interpreter.run(inBuf, out)
+          prob = if (last == 1) out[0][0] else out[0].getOrElse(1) { out[0][0] }
+        }
+      }
+    } catch (t: Throwable) {
+      Log.e("DeepfakeRun", "TFLite run() failed: ${t.javaClass.simpleName}: ${t.message}", t)
+      throw t
+    }
+
+    if (prob.isNaN() || prob.isInfinite()) prob = 0.5f
+    return prob.coerceIn(0f, 1f)
+  }
+
+
+  // 모델 IO 스펙 로그
+  private fun logModelIO() {
+    try {
+      val it = tflite ?: return
+      val inT = it.getInputTensor(0)
+      val outT = it.getOutputTensor(0)
+      Log.i("DeepfakeIO", "IN: ${inT.dataType()} ${inT.shape().contentToString()} / OUT: ${outT.dataType()} ${outT.shape().contentToString()}")
+    } catch (_: Throwable) { /* ignore */ }
   }
 
   // ===== WAV 16k mono → FloatArray =====
+  /**
+   * PCM(1) + 16kHz + 16bit. 채널은 1 또는 2(2면 (L+R)/2 다운믹스)만 허용.
+   */
   private fun readWav16kMono(uriString: String): FloatArray? {
     val uri = Uri.parse(uriString)
     val ins = if (uri.scheme == "content") reactCtx.contentResolver.openInputStream(uri)
               else java.io.FileInputStream(uri.path)
     if (ins == null) return null
     val all = ins.readBytes().also { ins.close() }
-    if (all.size < 44 || String(all.copyOfRange(0,4)) != "RIFF") return null
+    if (all.size < 44 || String(all.copyOfRange(0,4)) != "RIFF" || String(all.copyOfRange(8,12)) != "WAVE") {
+      Log.e("DeepfakeStep", "Not a RIFF/WAVE")
+      return null
+    }
 
     var p = 12
+    var fmtFound = false
+    var audioFormat = -1
+    var numChannels = -1
+    var sampleRate = -1
+    var bitsPerSample = -1
     var dataOffset = -1
     var dataSize = -1
+
     while (p + 8 <= all.size) {
       val id = String(all.copyOfRange(p, p+4))
-      val sz = ByteBuffer
-        .wrap(all, p+4, 4)
-        .order(ByteOrder.LITTLE_ENDIAN)
-        .getInt()
-      if (id == "data") { dataOffset = p + 8; dataSize = sz; break }
+      val sz = ByteBuffer.wrap(all, p+4, 4).order(ByteOrder.LITTLE_ENDIAN).getInt()
+      val body = p + 8
+      when (id) {
+        "fmt " -> {
+          fmtFound = true
+          if (sz >= 16) {
+            audioFormat   = ByteBuffer.wrap(all, body + 0,  2).order(ByteOrder.LITTLE_ENDIAN).getShort().toInt() and 0xFFFF
+            numChannels   = ByteBuffer.wrap(all, body + 2,  2).order(ByteOrder.LITTLE_ENDIAN).getShort().toInt() and 0xFFFF
+            sampleRate    = ByteBuffer.wrap(all, body + 4,  4).order(ByteOrder.LITTLE_ENDIAN).getInt()
+            bitsPerSample = ByteBuffer.wrap(all, body + 14, 2).order(ByteOrder.LITTLE_ENDIAN).getShort().toInt() and 0xFFFF
+          }
+        }
+        "data" -> {
+          dataOffset = body
+          dataSize = sz
+          break
+        }
+      }
       p += 8 + sz
     }
-    if (dataOffset < 0 || dataSize <= 0) return null
 
-    val bb: ByteBuffer = ByteBuffer
-      .wrap(all, dataOffset, dataSize)
-      .order(ByteOrder.LITTLE_ENDIAN)
-    val out = FloatArray(dataSize / 2)
-    var i = 0
-    while (i < out.size) {
-      out[i] = (bb.getShort().toFloat() / 32768f)
-      i++
+    if (!fmtFound || dataOffset < 0 || dataSize <= 0) {
+      Log.e("DeepfakeStep", "fmt/data chunk not found")
+      return null
     }
-    return out
+    if (audioFormat != 1 || sampleRate != 16000 || bitsPerSample != 16) {
+      Log.e("DeepfakeStep", "Unsupported WAV fmt: format=$audioFormat, ch=$numChannels, sr=$sampleRate, bps=$bitsPerSample")
+      return null
+    }
+
+    val bb = ByteBuffer.wrap(all, dataOffset, dataSize).order(ByteOrder.LITTLE_ENDIAN)
+
+    return when (numChannels) {
+      1 -> {
+        val frames = dataSize / 2
+        val out = FloatArray(frames)
+        var i = 0
+        while (i < frames && bb.remaining() >= 2) {
+          out[i] = (bb.getShort().toFloat() / 32768f)
+          i++
+        }
+        out
+      }
+      2 -> {
+        // stereo → mono downmix
+        val frames = dataSize / 4 // (2 bytes * 2 ch)
+        val out = FloatArray(frames)
+        var i = 0
+        while (i < frames && bb.remaining() >= 4) {
+          val l = bb.getShort().toInt()
+          val r = bb.getShort().toInt()
+          val mono = ((l + r) / 2.0f) / 32768f
+          out[i] = mono
+          i++
+        }
+        out
+      }
+      else -> {
+        Log.e("DeepfakeStep", "Unsupported channels: $numChannels")
+        null
+      }
+    }
   }
 
   // ===== MFCC → 224x224x3 =====
@@ -336,49 +499,76 @@ class DeepfakeDetectorModule(private val reactCtx: ReactApplicationContext)
     var idx = 0
     val windowed = FloatArray(FFT_SIZE)
     val fftBuffer = FloatArray(FFT_SIZE * 2) // interleaved re,im
-    val mags: FloatArray = FloatArray(FFT_SIZE / 2)
 
+    // 🔧 modulus() 출력용 풀 스펙트럼(= FFT_SIZE)
+    val magsFull: FloatArray = FloatArray(FFT_SIZE)
+    // 🔧 실제 사용: 반쪽 스펙트럼(= FFT_SIZE / 2)
+    val nBins = FFT_SIZE / 2
+    val mags: FloatArray = FloatArray(nBins)
+
+    var frameIndex = 0
     while (idx + FRAME <= pcm.size) {
-      // Hamming window & zero-padding
+      // window & zero-pad
       java.util.Arrays.fill(windowed, 0f)
       val win: FloatArray = hamming(pcm, idx, FRAME)
       System.arraycopy(win, 0, windowed, 0, FRAME)
 
-      // Fill re/im buffer (real, imag interleaved)
+      // real → interleaved re/im
       java.util.Arrays.fill(fftBuffer, 0f)
       var w = 0; var b = 0
       while (w < FFT_SIZE) { fftBuffer[b] = windowed[w]; b += 2; w++ }
 
-      // FFT → magnitude
+      // FFT → magnitude(full)
       fft.forwardTransform(fftBuffer)
-      fft.modulus(fftBuffer, mags)
+      fft.modulus(fftBuffer, magsFull)  // length = FFT_SIZE
 
-      // === MFCC 직접 계산 ===
-      val mfccs: FloatArray = computeMFCCFromSpectrum(
-        mags = mags,
-        sampleRate = SAMPLE_RATE,
-        fftSize = FFT_SIZE,
-        nMels = MEL_FILTERS,
-        nMfcc = N_MFCC
-      )
+      // ✅ 반쪽 스펙트럼만 사용 (0..nBins-1)
+      System.arraycopy(magsFull, 0, mags, 0, nBins)
 
-      // log, 정규화는 computeMFCCFromSpectrum 내부에서 처리됨
+      // NaN/Inf guard
+      var badMags = 0
+      var mi = 0
+      while (mi < mags.size) {
+        val v = mags[mi]
+        if (!isFiniteF(v) || v < 0f) { mags[mi] = 0f; badMags++ }
+        mi++
+      }
+      if (frameIndex % 50 == 0) {
+        Log.d("DeepfakeStep", "FFT ok frame=$frameIndex badMags=$badMags")
+      }
+
+      // MFCC (mel power → log → DCT)
+      val mfccs: FloatArray = try {
+        computeMFCCFromSpectrum(
+          mags = mags,                // 256 bins
+          sampleRate = SAMPLE_RATE,
+          fftSize = FFT_SIZE,
+          nMels = MEL_FILTERS,
+          nMfcc = N_MFCC
+        )
+      } catch (t: Throwable) {
+        Log.e("DeepfakeStep", "computeMFCCFromSpectrum failed at frame=$frameIndex", t)
+        throw t
+      }
+
+      // 안정적 로그/클램프
       val row = FloatArray(N_MFCC)
       var k = 0
       while (k < N_MFCC) {
-        val v0: Float = if (k < mfccs.size) {
-          val v = mfccs[k]
-          if (v < 0f) -v else v
-        } else 0f
-        val vSafe = if (v0 <= 1e-6f) 1e-6f else v0
-        row[k] = Math.log(vSafe.toDouble()).toFloat() // 안정적 로그
+        val v0 = if (k < mfccs.size) mfccs[k] else 0f
+        val vSafe = if (!isFiniteF(v0)) 0f else abs(v0)
+        var vv = ln((if (vSafe <= 1e-6f) 1e-6f else vSafe).toDouble()).toFloat()
+        if (!isFiniteF(vv)) vv = 0f
+        row[k] = vv
         k++
       }
       timeFeats.add(row)
+
       idx += HOP
+      frameIndex++
     }
 
-    // spec list -> array
+    // list -> array
     val specList: ArrayList<FloatArray> = ArrayList(timeFeats.size)
     var r0 = 0
     while (r0 < timeFeats.size) {
@@ -393,18 +583,17 @@ class DeepfakeDetectorModule(private val reactCtx: ReactApplicationContext)
 
     val img: Array<FloatArray> = bilinearResizeAndNorm(spec, 224, 224)
 
-    // out: 224x224x3 (list -> array)
+    // out: 224x224x3 (grayscale→3ch) + NaN guard
     val outRows: ArrayList<Array<FloatArray>> = ArrayList(224)
     var r = 0
     while (r < 224) {
       val colList: ArrayList<FloatArray> = ArrayList(224)
       var c = 0
       while (c < 224) {
-        val v = img[r][c]
+        val v0 = img[r][c]
+        val v = if (isFiniteF(v0)) v0.coerceIn(0f, 1f) else 0f
         val triple = FloatArray(3)
-        triple[0] = v
-        triple[1] = v
-        triple[2] = v
+        triple[0] = v; triple[1] = v; triple[2] = v
         colList.add(triple)
         c++
       }
@@ -420,7 +609,9 @@ class DeepfakeDetectorModule(private val reactCtx: ReactApplicationContext)
     var i = 0
     while (i < n) {
       val w = 0.54 - 0.46 * cos(twoPi * i / (n - 1).toDouble())
-      out[i] = (src[off + i] * w.toFloat())
+      var v = src[off + i] * w.toFloat()
+      if (!isFiniteF(v)) v = 0f
+      out[i] = v
       i++
     }
     return out
@@ -432,10 +623,7 @@ class DeepfakeDetectorModule(private val reactCtx: ReactApplicationContext)
 
     val outList: ArrayList<FloatArray> = ArrayList(h)
     var y = 0
-    while (y < h) {
-      outList.add(FloatArray(w))
-      y++
-    }
+    while (y < h) { outList.add(FloatArray(w)); y++ }
 
     var mn = Float.POSITIVE_INFINITY
     var mx = Float.NEGATIVE_INFINITY
@@ -459,7 +647,8 @@ class DeepfakeDetectorModule(private val reactCtx: ReactApplicationContext)
         val c = src[y1][x0]
         val d = src[y1][x1]
 
-        val v = ((1f - wy) * ((1f - wx) * a + wx * b) + wy * ((1f - wx) * c + wx * d))
+        var v = ((1f - wy) * ((1f - wx) * a + wx * b) + wy * ((1f - wx) * c + wx * d))
+        if (!isFiniteF(v)) v = 0f
         outList[y][x] = v
 
         if (v < mn) mn = v
@@ -470,26 +659,21 @@ class DeepfakeDetectorModule(private val reactCtx: ReactApplicationContext)
     }
 
     val s = mx - mn
-    if (s > 1e-6f) {
+    if (s > 1e-6f && isFiniteF(mn) && isFiniteF(mx)) {
       y = 0
       while (y < h) {
         var x2 = 0
         while (x2 < w) {
-          outList[y][x2] = (outList[y][x2] - mn) / s
+          var z = (outList[y][x2] - mn) / s
+          if (!isFiniteF(z)) z = 0f
+          outList[y][x2] = z
           x2++
         }
         y++
       }
     } else {
       y = 0
-      while (y < h) {
-        var x3 = 0
-        while (x3 < w) {
-          outList[y][x3] = 0f
-          x3++
-        }
-        y++
-      }
+      while (y < h) { java.util.Arrays.fill(outList[y], 0f); y++ }
     }
     return outList.toTypedArray()
   }
@@ -502,29 +686,32 @@ class DeepfakeDetectorModule(private val reactCtx: ReactApplicationContext)
     nMels: Int,
     nMfcc: Int
   ): FloatArray {
-    // 1) Mel 필터뱅크 (삼각 필터)
     val melFilters = buildMelFilterBank(sampleRate, fftSize, nMels)
 
-    // 2) mel 에너지 = Σ |X(k)|^2 * filter
     val melEnergies = FloatArray(nMels)
     var m = 0
     while (m < nMels) {
       var sum = 0.0
       val filt = melFilters[m]
-      var k = 0
       val len = mags.size.coerceAtMost(filt.size)
+      var k = 0
       while (k < len) {
         val p = mags[k].toDouble()
-        sum += (p * p) * filt[k] // power spectrum
+        val pp = if (p.isFinite() && p >= 0.0) p else 0.0
+        sum += (pp * pp) * filt[k] // power spectrum
         k++
       }
-      // 3) log
-      melEnergies[m] = Math.log(if (sum <= 1e-10) 1e-10 else sum).toFloat()
+      val logged = ln((if (sum <= 1e-10) 1e-10 else sum)).toFloat()
+      melEnergies[m] = if (!logged.isNaN() && !logged.isInfinite()) logged else 0f
       m++
     }
-
-    // 4) DCT-II → MFCC (0..nMfcc-1)
-    return dctTypeII(melEnergies, nMfcc)
+    val out = dctTypeII(melEnergies, nMfcc)
+    var i = 0
+    while (i < out.size) {
+      if (!isFiniteF(out[i])) out[i] = 0f
+      i++
+    }
+    return out
   }
 
   private fun buildMelFilterBank(sampleRate: Int, fftSize: Int, nMels: Int): Array<DoubleArray> {
@@ -542,14 +729,12 @@ class DeepfakeDetectorModule(private val reactCtx: ReactApplicationContext)
       melPoints[i] = melMin + (melMax - melMin) * i / (nMels + 1)
     }
 
-    // mel 포인트를 FFT bin 인덱스로 매핑
     val bin = IntArray(nMels + 2)
     for (i in 0 until nMels + 2) {
       val hz = melToHz(melPoints[i])
       bin[i] = Math.floor((fftSize + 1) * hz / (2.0 * sampleRate)).toInt().coerceIn(0, nFftBins - 1)
     }
 
-    // 삼각 필터 생성
     val filters = Array(nMels) { DoubleArray(nFftBins) }
     for (m in 1..nMels) {
       val f_m_minus = bin[m - 1]
@@ -558,11 +743,13 @@ class DeepfakeDetectorModule(private val reactCtx: ReactApplicationContext)
 
       var k = f_m_minus
       while (k < f_m) {
-        filters[m - 1][k] = (k - f_m_minus).toDouble() / (f_m - f_m_minus).toDouble().coerceAtLeast(1.0)
+        val denom = (f_m - f_m_minus).toDouble().coerceAtLeast(1.0)
+        filters[m - 1][k] = (k - f_m_minus).toDouble() / denom
         k++
       }
       while (k <= f_m_plus && k < nFftBins) {
-        filters[m - 1][k] = (f_m_plus - k).toDouble() / (f_m_plus - f_m).toDouble().coerceAtLeast(1.0)
+        val denom = (f_m_plus - f_m).toDouble().coerceAtLeast(1.0)
+        filters[m - 1][k] = (f_m_plus - k).toDouble() / denom
         k++
       }
     }
@@ -581,8 +768,9 @@ class DeepfakeDetectorModule(private val reactCtx: ReactApplicationContext)
         sum += src[n] * Math.cos((n + 0.5) * k * factor)
         n++
       }
-      // 간단 정규화 (c0 특수처리 생략)
-      out[k] = (sum * Math.sqrt(2.0 / N)).toFloat()
+      var v = (sum * Math.sqrt(2.0 / N)).toFloat()
+      if (!isFiniteF(v)) v = 0f
+      out[k] = v
       k++
     }
     return out

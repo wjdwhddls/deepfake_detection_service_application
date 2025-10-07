@@ -9,15 +9,25 @@ import LinearGradient from 'react-native-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../lib/config';
 
-// // 서버 주소: 에뮬레이터용은 10.0.2.2, 실제 기기/배포용은 EC2
-// // const API_BASE = 'http://10.0.2.2:3000';
-
 /* ====================== 에러 메시지 한글 변환 유틸 ====================== */
+// 항상 "문자열"을 반환하도록 보강
 const toKoreanBackendMessage = (data) => {
   if (!data) return null;
+
   if (typeof data === 'string') return data;
-  if (Array.isArray(data)) return data.join(', ');
-  if (typeof data === 'object') return data.message ?? Object.values(data).join(', ');
+
+  if (Array.isArray(data)) return data.map(v => (typeof v === 'string' ? v : String(v))).join(', ');
+
+  if (typeof data === 'object') {
+    const cand = data.message ?? data.error ?? data.errors ?? data.msg ?? null;
+
+    if (Array.isArray(cand)) return cand.map(v => (typeof v === 'string' ? v : String(v))).join(', ');
+    if (typeof cand === 'string') return cand;
+
+    const flat = Object.values(data).flatMap(v => (Array.isArray(v) ? v : [v]));
+    return flat.map(v => (typeof v === 'string' ? v : String(v))).join(', ');
+  }
+
   return null;
 };
 
@@ -63,17 +73,17 @@ const toKoreanErrorMessage = (error) => {
 };
 /* ===================================================================== */
 
-// ✅ 화면 크기 기반 블롭 사이즈/위치
+// 화면 크기 기반 블롭 사이즈/위치
 const { width: W, height: H } = Dimensions.get('window');
-const BLOB_LT_SIZE = Math.max(W, H) * 0.9;   // 좌상단 큰 원
-const BLOB_RB_SIZE = Math.max(W, H) * 0.85;  // 우하단 큰 원
+const BLOB_LT_SIZE = Math.max(W, H) * 0.9;
+const BLOB_RB_SIZE = Math.max(W, H) * 0.85;
 
 const LoginScreen = ({ setIsLoggedIn, onLoginSuccess }) => {
   const navigation = useNavigation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  // ✅ 로그인 처리 (Alert로 성공/실패 표시) — 로직 그대로 유지
+  // 로그인 처리
   const handleLogin = async () => {
     const trimmedEmail = email.trim();
     const trimmedPassword = password;
@@ -95,11 +105,11 @@ const LoginScreen = ({ setIsLoggedIn, onLoginSuccess }) => {
         Alert.alert('로그인 성공', '환영합니다!');
       } else {
         const msg = toKoreanBackendMessage(response.data) || '서버에서 토큰을 받지 못했습니다.';
-        Alert.alert('로그인 실패', msg);
+        Alert.alert('로그인 실패', String(msg));
       }
     } catch (error) {
       const msg = toKoreanErrorMessage(error);
-      Alert.alert('로그인 실패', msg);
+      Alert.alert('로그인 실패', String(msg));
     }
   };
 
@@ -122,7 +132,7 @@ const LoginScreen = ({ setIsLoggedIn, onLoginSuccess }) => {
 
   return (
     <SafeAreaView style={styles.safe}>
-      {/* ✅ 배경: 홈과 통일 (위→아래 어두워짐) */}
+      {/* 배경 */}
       <LinearGradient
         colors={['#20B2F3', '#5E73F7', '#0F1730']}
         locations={[0, 0.55, 1]}
@@ -131,7 +141,6 @@ const LoginScreen = ({ setIsLoggedIn, onLoginSuccess }) => {
         style={StyleSheet.absoluteFill}
         pointerEvents="none"
       />
-      {/* ✅ 큰 원(블롭) 2개: 좌상단 밝게 / 우하단 어둡게 */}
       <View style={[styles.blob, styles.blobLT]} pointerEvents="none" />
       <View style={[styles.blob, styles.blobRB]} pointerEvents="none" />
 
@@ -142,12 +151,10 @@ const LoginScreen = ({ setIsLoggedIn, onLoginSuccess }) => {
             <Image source={require('../assets/Detection.png')} style={styles.logo} resizeMode="contain" />
             <View style={styles.equalizer} pointerEvents="none">
               {bars.map((v, idx) => {
-                const h = v.interpolate({ inputRange: [0, 1], outputRange: [10, 72] }); // ↑ 더 높게
+                const h = v.interpolate({ inputRange: [0, 1], outputRange: [10, 72] });
                 return (
                   <View key={idx} style={styles.eqItem}>
-                    {/* 글로우 */}
                     <Animated.View style={[styles.eqGlow, { height: Animated.add(h, 14) }]} />
-                    {/* 막대 */}
                     <Animated.View
                       style={[
                         styles.eqBar,
@@ -163,7 +170,7 @@ const LoginScreen = ({ setIsLoggedIn, onLoginSuccess }) => {
             </View>
           </View>
 
-          {/* 카드 제거 + 입력 박스 크게 */}
+          {/* 입력 */}
           <View style={styles.card}>
             <View style={styles.inputPill}>
               <TextInput
@@ -227,11 +234,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   safe: { flex: 1, backgroundColor: '#0A1430' },
 
-  // ✅ 블롭 공통
-  blob: {
-    position: 'absolute',
-    borderRadius: 9999,
-  },
+  blob: { position: 'absolute', borderRadius: 9999 },
   blobLT: {
     width: BLOB_LT_SIZE,
     height: BLOB_LT_SIZE,
@@ -249,11 +252,9 @@ const styles = StyleSheet.create({
 
   container: { flex: 1, justifyContent: 'center', paddingHorizontal: 22 },
 
-  // 로고와 이퀄라이저 간격을 좁혀 임팩트 강화
   header: { alignItems: 'center', marginBottom: 16 },
   logo: { width: 500, height: 280 },
 
-  // 이퀄라이저를 더 크게/가깝게
   equalizer: {
     height: 72,
     width: '88%',
@@ -263,15 +264,14 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
 
-  // 각 막대 컨테이너(그림자/글로우용)
   eqItem: {
-    width: 10,                // 막대 두께 ↑
+    width: 10,
     alignItems: 'center',
     justifyContent: 'flex-end',
-    marginHorizontal: 3,      // 간격 ↑
+    marginHorizontal: 3,
     position: 'relative',
   },
-  eqBar: { width: '100%', borderRadius: 6 }, // 둥글기 강화
+  eqBar: { width: '100%', borderRadius: 6 },
   eqGlow: {
     position: 'absolute',
     bottom: -4,
@@ -285,16 +285,8 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
 
-  /* 🔹 카드 상자 비주얼 제거 */
-  card: {
-    backgroundColor: 'transparent',
-    borderWidth: 0,
-    padding: 0,
-    shadowOpacity: 0,
-    elevation: 0,
-  },
+  card: { backgroundColor: 'transparent', borderWidth: 0, padding: 0, shadowOpacity: 0, elevation: 0 },
 
-  /* 🔹 입력 박스 크게 */
   inputPill: {
     height: 60,
     borderRadius: 30,
@@ -305,10 +297,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.16)',
   },
-  pillText: {
-    color: '#F2F7FF',
-    fontSize: 17,
-  },
+  pillText: { color: '#F2F7FF', fontSize: 17 },
 
   cta: {
     marginTop: 10,
