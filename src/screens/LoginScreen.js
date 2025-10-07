@@ -19,11 +19,24 @@ const ensureString = (val) => {
 /* ================================================================== */
 
 /* ====================== 에러 메시지 한글 변환 유틸 ====================== */
+// 항상 "문자열"을 반환하도록 보강
 const toKoreanBackendMessage = (data) => {
   if (!data) return null;
+
   if (typeof data === 'string') return data;
-  if (Array.isArray(data)) return data.join(', ');
-  if (typeof data === 'object') return data.message ?? Object.values(data).join(', ');
+
+  if (Array.isArray(data)) return data.map(v => (typeof v === 'string' ? v : String(v))).join(', ');
+
+  if (typeof data === 'object') {
+    const cand = data.message ?? data.error ?? data.errors ?? data.msg ?? null;
+
+    if (Array.isArray(cand)) return cand.map(v => (typeof v === 'string' ? v : String(v))).join(', ');
+    if (typeof cand === 'string') return cand;
+
+    const flat = Object.values(data).flatMap(v => (Array.isArray(v) ? v : [v]));
+    return flat.map(v => (typeof v === 'string' ? v : String(v))).join(', ');
+  }
+
   return null;
 };
 
@@ -69,10 +82,10 @@ const toKoreanErrorMessage = (error) => {
 };
 /* ===================================================================== */
 
-// ✅ 화면 크기 기반 블롭 사이즈/위치
+// 화면 크기 기반 블롭 사이즈/위치
 const { width: W, height: H } = Dimensions.get('window');
-const BLOB_LT_SIZE = Math.max(W, H) * 0.9;   // 좌상단 큰 원
-const BLOB_RB_SIZE = Math.max(W, H) * 0.85;  // 우하단 큰 원
+const BLOB_LT_SIZE = Math.max(W, H) * 0.9;
+const BLOB_RB_SIZE = Math.max(W, H) * 0.85;
 
 const LoginScreen = ({ setIsLoggedIn, onLoginSuccess }) => {
   const navigation = useNavigation();
@@ -128,7 +141,7 @@ const LoginScreen = ({ setIsLoggedIn, onLoginSuccess }) => {
 
   return (
     <SafeAreaView style={styles.safe}>
-      {/* ✅ 배경: 홈과 통일 (위→아래 어두워짐) */}
+      {/* 배경 */}
       <LinearGradient
         colors={['#20B2F3', '#5E73F7', '#0F1730']}
         locations={[0, 0.55, 1]}
@@ -137,7 +150,6 @@ const LoginScreen = ({ setIsLoggedIn, onLoginSuccess }) => {
         style={StyleSheet.absoluteFill}
         pointerEvents="none"
       />
-      {/* ✅ 큰 원(블롭) 2개: 좌상단 밝게 / 우하단 어둡게 */}
       <View style={[styles.blob, styles.blobLT]} pointerEvents="none" />
       <View style={[styles.blob, styles.blobRB]} pointerEvents="none" />
 
@@ -164,7 +176,7 @@ const LoginScreen = ({ setIsLoggedIn, onLoginSuccess }) => {
             </View>
           </View>
 
-          {/* 카드 제거 + 입력 박스 크게 */}
+          {/* 입력 */}
           <View style={styles.card}>
             <View style={styles.inputPill}>
               <TextInput
@@ -228,11 +240,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   safe: { flex: 1, backgroundColor: '#0A1430' },
 
-  // ✅ 블롭 공통
-  blob: {
-    position: 'absolute',
-    borderRadius: 9999,
-  },
+  blob: { position: 'absolute', borderRadius: 9999 },
   blobLT: {
     width: BLOB_LT_SIZE,
     height: BLOB_LT_SIZE,
@@ -301,10 +309,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.16)',
   },
-  pillText: {
-    color: '#F2F7FF',
-    fontSize: 17,
-  },
+  pillText: { color: '#F2F7FF', fontSize: 17 },
 
   cta: {
     marginTop: 10,
