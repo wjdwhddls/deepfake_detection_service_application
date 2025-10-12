@@ -1,197 +1,5 @@
-// import React from 'react';
-// import {
-//   View,
-//   Text,
-//   StyleSheet,
-//   Image,
-//   Dimensions,
-// } from 'react-native';
-// import LinearGradient from 'react-native-linear-gradient';
-// import { useTheme } from '../contexts/ThemeContext'; // 컨텍스트 import
+// (기존 대비용 주석 블록은 유지)
 
-// const { width } = Dimensions.get('window');
-
-// const ResultScreen = ({ route }) => {
-//   const resultData = route.params?.result;
-//   const { isLightMode } = useTheme(); // 테마 값 획득
-//   const styles = getDynamicStyles(isLightMode); // 동적 스타일 생성
-
-//   // 라이트/다크별 그라데이션 팔레트
-//   const gradientColors = isLightMode
-//     ? ['#E0EAFC', '#CFDEF3', '#fcfff7']
-//     : ['#232526', '#414345', '#0f2027'];
-
-//   if (!resultData) {
-//     return (
-//       <LinearGradient colors={gradientColors} style={styles.gradientContainer}>
-//         <View style={styles.errorContainer}>
-//           <Text style={styles.errorText}>결과 데이터를 확인할 수 없습니다.</Text>
-//         </View>
-//       </LinearGradient>
-//     );
-//   }
-
-//   return (
-//     <LinearGradient colors={gradientColors} style={styles.gradientContainer}>
-//       <View style={styles.container}>
-//         <View style={[styles.resultContainer, styles.shadow]}>
-//           <Text style={styles.title}>📊 분석 결과</Text>
-
-//           {/* 이미지 경로에 따라 이미지를 표시 */}
-//           <View style={styles.imageContainer}>
-//             {resultData.imageUri ? (
-//               <Image
-//                 style={styles.image}
-//                 source={{ uri: resultData.imageUri }} // resultData.imageUri 사용
-//                 resizeMode="contain"
-//               />
-//             ) : (
-//               <Image
-//                 style={styles.image}
-//                 source={require('../assets/image2.png')} // 기본 이미지 경로
-//                 resizeMode="contain"
-//               />
-//             )}
-//           </View>
-
-//           <Text style={styles.resultText}>
-//             <Text style={styles.resultLabel}>결과: </Text>
-//             {resultData.result || '데이터 없음'}
-//           </Text>
-
-//           {/* 추가적인 이미지를 포함한 영역 */}
-//           <View style={styles.additionalImageContainer}>
-//             <Image
-//               style={styles.additionalImage}
-//               source={require('../assets/image.png')} // 기본 이미지 경로
-//               resizeMode="contain"
-//             />
-//           </View>
-//         </View>
-//         <View style={styles.placeholderContainer}>
-//           <Text style={styles.placeholderText}>필독: 아래 정보를 확인하세요.</Text>
-//         </View>
-//       </View>
-//     </LinearGradient>
-//   );
-// };
-
-// // 전문성있고 다크/라이트 대응되는 스타일
-// const getDynamicStyles = (isLightMode) =>
-//   StyleSheet.create({
-//     gradientContainer: {
-//       flex: 1,
-//       justifyContent: 'center',
-//       alignItems: 'center',
-//     },
-//     container: {
-//       flex: 1,
-//       width: '92%',
-//       alignItems: 'center',
-//       justifyContent: 'flex-start', // Flex-direction 변경
-//       padding: 20,
-//       marginTop: 20,
-//       marginBottom: 20,
-//       borderRadius: 16,
-//       backgroundColor: isLightMode ? '#ffffff' : '#222C36',
-//       shadowColor: '#000',
-//       shadowOffset: { width: 0, height: 5 },
-//       shadowOpacity: 0.2,
-//       shadowRadius: 10,
-//       elevation: 4,
-//     },
-//     resultContainer: {
-//       width: '100%',
-//       padding: 24,
-//       backgroundColor: isLightMode ? '#f9f9fb' : '#2b2b2b',
-//       borderRadius: 16,
-//       alignItems: 'center',
-//       borderWidth: 1,
-//       borderColor: isLightMode ? '#e6eefb' : '#555',
-//       marginBottom: 20,
-//     },
-//     title: {
-//       fontSize: 24,
-//       fontWeight: 'bold',
-//       color: isLightMode ? '#333' : '#e3eafd',
-//       marginBottom: 10,
-//     },
-//     resultText: {
-//       fontSize: 18,
-//       color: isLightMode ? '#333' : '#e3eafd',
-//       textAlign: 'center',
-//       marginVertical: 8,
-//     },
-//     resultLabel: {
-//       fontWeight: 'bold',
-//       color: isLightMode ? '#2196F3' : '#8ebeef',
-//     },
-//     imageContainer: {
-//       width: '100%', // 이미지 컨테이너가 화면 가득 차도록
-//       height: 250, // 높이 조정
-//       justifyContent: 'center',
-//       alignItems: 'center',
-//       marginVertical: 20,
-//       borderRadius: 12,
-//       overflow: 'hidden',
-//       elevation: 3,
-//       backgroundColor: isLightMode ? '#f2f6fd' : '#222C36',
-//     },
-//     image: {
-//       width: '120%',
-//       height: '100%',
-//       borderRadius: 12,
-//     },
-//     additionalImageContainer: {
-//       width: '200%', // 컨테이너 너비를 더 늘림
-//       justifyContent: 'center',
-//       alignItems: 'center',
-//       marginTop: 0,
-//     },
-//     additionalImage: {
-//       width: '100%', // 컨테이너 기준 100% 유지
-//       height: 200,   // 이미지 높이를 더 크게
-//       borderRadius: 12,
-//     },
-
-
-//     placeholderContainer: {
-//       alignItems: 'center',
-//       justifyContent: 'center',
-//       flex: 1,
-//       marginTop: 20,
-//     },
-//     placeholderText: {
-//       fontSize: 16,
-//       color: isLightMode ? '#888' : '#bbb',
-//       textAlign: 'center',
-//       fontStyle: 'italic',
-//     },
-//     errorContainer: {
-//       justifyContent: 'center',
-//       alignItems: 'center',
-//       padding: 20,
-//       borderRadius: 18,
-//       backgroundColor: isLightMode ? '#fff3f4' : '#2a1717',
-//       borderWidth: 1,
-//       borderColor: isLightMode ? '#facccc' : '#5f2042',
-//     },
-//     errorText: {
-//       fontSize: 20,
-//       color: isLightMode ? '#fa2b2b' : '#ff8cb3',
-//       fontWeight: 'bold',
-//       textAlign: 'center',
-//     },
-//     shadow: {
-//       shadowColor: '#000',
-//       shadowOffset: { width: 0, height: 6 },
-//       shadowOpacity: 0.13,
-//       shadowRadius: 8,
-//       elevation: 3,
-//     },
-//   });
-
-// export default ResultScreen;
 // 위에 맨 처음 기존 코드 혹시 대비용 코드 지우지 말기
 
 import React from 'react';
@@ -217,6 +25,12 @@ const PALETTE = {
   safe1: '#34D399', safe2: '#10B981',
   warn1: '#F59E0B', warn2: '#D97706',
   danger1: '#EF4444', danger2: '#B91C1C',
+};
+
+// 0~1 범위로 보정
+const clamp01 = (v) => {
+  if (typeof v !== 'number' || Number.isNaN(v) || !Number.isFinite(v)) return 0;
+  return Math.min(1, Math.max(0, v));
 };
 
 function levelFromRealProb(pReal) {
@@ -264,7 +78,7 @@ const CircleBadge = ({ title, percent, colors }) => {
 };
 
 const ResultScreen = ({ route }) => {
-  const resultData = route.params?.result;  // ✅ 기존 데이터 흐름 유지
+  const resultData = route.params?.result;  // 네이티브 결과 객체
   useTheme(); // (흐름 유지용)
 
   const bg = [PALETTE.g1, PALETTE.g2, PALETTE.g3];
@@ -279,11 +93,20 @@ const ResultScreen = ({ route }) => {
     );
   }
 
-  const probReal = typeof resultData.prob_real === 'number' ? resultData.prob_real : 0;
+  // ✅ 코틀린의 prob가 prob_real로 넘어옴. 혹시 대비해 별칭 키도 체크.
+  const rawReal =
+    typeof resultData.prob_real === 'number' ? resultData.prob_real
+    : typeof resultData.pReal === 'number' ? resultData.pReal
+    : typeof resultData.prob === 'number' ? resultData.prob
+    : typeof resultData.real === 'number' ? resultData.real
+    : typeof resultData.score === 'number' ? resultData.score
+    : 0;
+
+  const probReal = clamp01(rawReal);
   const realPct  = Math.round(probReal * 100);
   const fakePct  = 100 - realPct;
   const level    = levelFromRealProb(probReal);
-  const resultStr = resultData.result || '-';
+  const resultStr = typeof resultData.result === 'string' ? resultData.result : '-';
 
   return (
     <LinearGradient colors={bg} style={styles.fill}>
@@ -315,6 +138,12 @@ const ResultScreen = ({ route }) => {
                   <Text style={styles.kVal}>{realPct}%</Text>
                 </View>
               </View>
+
+              {/* 🔍 원시 확률값(0~1)도 함께 노출: 디버깅/검증용 */}
+              <View style={[styles.kv, { marginTop: 12, width: '100%' }]}>
+                <Text style={styles.kKey}>Raw pReal (0~1)</Text>
+                <Text style={styles.kVal}>{probReal.toFixed(4)}</Text>
+              </View>
             </View>
 
             {/* 2) 후속 조치 */}
@@ -322,7 +151,6 @@ const ResultScreen = ({ route }) => {
               <Text style={styles.sectionTitle}>후속 조치</Text>
               <Text style={styles.sectionDesc}>아래 안내를 순서대로 진행해 주세요.</Text>
 
-              {/* 제목과 리스트 사이 간격 확장 */}
               <View style={styles.actionsBodyTop} />
 
               {level.steps.map((t, i) => (
@@ -355,7 +183,6 @@ const styles = StyleSheet.create({
   fill: { flex: 1 },
   fillCenter: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
-  // ⬇️ 스크롤 여백 확장: 상단 배너와 분리 + 탭바/FAB에 안 가리도록
   scrollContent: {
     paddingTop: 72,
     paddingBottom: 140,
@@ -383,14 +210,13 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   cardActions: {
-    paddingTop: 24,            // 후속 조치 카드 상단 여백
+    paddingTop: 24,
     paddingBottom: 22,
   },
 
   sectionTitle: { color: PALETTE.white, fontWeight: '900', fontSize: 20 },
   sectionDesc : { color: PALETTE.muted, fontSize: 14, marginTop: 8 },
 
-  // 제목과 리스트 사이 간격을 충분히
   actionsBodyTop: { height: 18 },
 
   dualRow: {
@@ -440,4 +266,3 @@ const styles = StyleSheet.create({
 });
 
 export default ResultScreen;
-
