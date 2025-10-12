@@ -30,7 +30,6 @@ import kotlin.math.cos
 import kotlin.math.floor
 import kotlin.math.abs
 import kotlin.math.ln
-import java.lang.Float.isFinite as JIsFinite  // static helper if needed
 
 class DeepfakeDetectorModule(private val reactCtx: ReactApplicationContext)
   : ReactContextBaseJavaModule(reactCtx), ActivityEventListener {
@@ -153,7 +152,7 @@ class DeepfakeDetectorModule(private val reactCtx: ReactApplicationContext)
       Log.d("DeepfakeStep", "detectFromFile uri=$uriString")
       ensureModel()
 
-      // 1) WAV load (PCM/16k/16bit; ch=1 or 2 → downmix)
+      // 1) WAV load (PCM/16-bit, any SR; 1ch or 2ch)
       val wav = readWav16kMono(uriString)
         ?: throw Exception("지원하지 않는 오디오 형식 (16kHz, mono, 16-bit PCM WAV만 지원)")
       Log.d("DeepfakeStep", "WAV loaded: samples=${wav.size}")
@@ -347,27 +346,23 @@ class DeepfakeDetectorModule(private val reactCtx: ReactApplicationContext)
 
     // ==== 출력 shape에 맞춰 정확한 객체로 받기 ====
     val outTensor = interpreter.getOutputTensor(0)
-    val outShape  = outTensor.shape()   // 예: [1,1] 또는 [1,2]
+    val outShape  = outTensor.shape()   // e.g., [1,1] or [1,2]
     val rank = outShape.size
 
     var prob = 0f
     try {
       when (rank) {
         1 -> {
-          // 예: [1]
           val out = FloatArray(outShape[0].coerceAtLeast(1))
           interpreter.run(inBuf, out)
           prob = out.getOrElse(if (out.size > 1) 1 else 0) { 0f }
         }
         2 -> {
-          // 예: [1,1] 또는 [1,2]
           val out = Array(outShape[0]) { FloatArray(outShape[1]) }
           interpreter.run(inBuf, out)
-          prob = if (outShape[1] == 1) out[0][0]
-                else out[0].getOrElse(1) { out[0][0] }
+          prob = if (outShape[1] == 1) out[0][0] else out[0].getOrElse(1) { out[0][0] }
         }
         else -> {
-          // 일반화: 마지막 차원을 로짓으로 가정
           val last = outShape.last()
           val out = Array(outShape[0]) { FloatArray(last) }
           interpreter.run(inBuf, out)
@@ -383,7 +378,6 @@ class DeepfakeDetectorModule(private val reactCtx: ReactApplicationContext)
     return prob.coerceIn(0f, 1f)
   }
 
-
   // 모델 IO 스펙 로그
   private fun logModelIO() {
     try {
@@ -396,7 +390,7 @@ class DeepfakeDetectorModule(private val reactCtx: ReactApplicationContext)
 
   // ===== WAV 16k mono → FloatArray =====
   /**
-   * PCM(1) + 16kHz + 16bit. 채널은 1 또는 2(2면 (L+R)/2 다운믹스)만 허용.
+   * PCM(1) + 16bit. 채널 1/2 허용. 샘플레이트는 임의 → 16kHz로 리샘플.
    */
   private fun readWav16kMono(uriString: String): FloatArray? {
     val uri = Uri.parse(uriString)
@@ -445,43 +439,68 @@ class DeepfakeDetectorModule(private val reactCtx: ReactApplicationContext)
       Log.e("DeepfakeStep", "fmt/data chunk not found")
       return null
     }
-    if (audioFormat != 1 || sampleRate != 16000 || bitsPerSample != 16) {
+    // PCM 16bit만 허용
+    if (audioFormat != 1 || bitsPerSample != 16) {
       Log.e("DeepfakeStep", "Unsupported WAV fmt: format=$audioFormat, ch=$numChannels, sr=$sampleRate, bps=$bitsPerSample")
+      return null
+    }
+    if (numChannels != 1 && numChannels != 2) {
+      Log.e("DeepfakeStep", "Unsupported channels: $numChannels")
       return null
     }
 
     val bb = ByteBuffer.wrap(all, dataOffset, dataSize).order(ByteOrder.LITTLE_ENDIAN)
 
-    return when (numChannels) {
-      1 -> {
-        val frames = dataSize / 2
-        val out = FloatArray(frames)
-        var i = 0
-        while (i < frames && bb.remaining() >= 2) {
-          out[i] = (bb.getShort().toFloat() / 32768f)
-          i++
-        }
-        out
+    // 1) 모노 신호 추출 (2ch → (L+R)/2 다운믹스)
+    val mono: FloatArray = if (numChannels == 1) {
+      val frames = dataSize / 2
+      val out = FloatArray(frames)
+      var i = 0
+      while (i < frames && bb.remaining() >= 2) { out[i] = bb.getShort() / 32768f; i++ }
+      out
+    } else {
+      val frames = dataSize / 4
+      val out = FloatArray(frames)
+      var i = 0
+      while (i < frames && bb.remaining() >= 4) {
+        val l = bb.getShort().toInt()
+        val r = bb.getShort().toInt()
+        out[i] = ((l + r) / 2.0f) / 32768f
+        i++
       }
-      2 -> {
-        // stereo → mono downmix
-        val frames = dataSize / 4 // (2 bytes * 2 ch)
-        val out = FloatArray(frames)
-        var i = 0
-        while (i < frames && bb.remaining() >= 4) {
-          val l = bb.getShort().toInt()
-          val r = bb.getShort().toInt()
-          val mono = ((l + r) / 2.0f) / 32768f
-          out[i] = mono
-          i++
-        }
-        out
-      }
-      else -> {
-        Log.e("DeepfakeStep", "Unsupported channels: $numChannels")
-        null
-      }
+      out
     }
+
+    // 2) 16kHz로 리샘플
+    return if (sampleRate == 16000) {
+      mono
+    } else {
+      val res = resampleLinear(mono, sampleRate, 16000)
+      Log.d("DeepfakeStep", "Resampled ${sampleRate}→16000, in=${mono.size}, out=${res.size}")
+      res
+    }
+  }
+
+  // 간단한 선형 보간 리샘플러 (srcRate → dstRate)
+  private fun resampleLinear(input: FloatArray, srcRate: Int, dstRate: Int): FloatArray {
+    if (input.isEmpty() || srcRate <= 0 || dstRate <= 0) return FloatArray(0)
+    if (srcRate == dstRate) return input.copyOf()
+
+    val ratio = dstRate.toDouble() / srcRate.toDouble()
+    val outLen = kotlin.math.max(1, kotlin.math.floor(input.size * ratio).toInt())
+    val out = FloatArray(outLen)
+
+    var i = 0
+    while (i < outLen) {
+      val srcPos = i / ratio
+      val i0 = kotlin.math.floor(srcPos).toInt().coerceIn(0, input.size - 1)
+      val i1 = (i0 + 1).coerceAtMost(input.size - 1)
+      val frac = (srcPos - i0)
+      val v = (input[i0] * (1.0 - frac) + input[i1] * frac).toFloat()
+      out[i] = if (isFiniteF(v)) v else 0f
+      i++
+    }
+    return out
   }
 
   // ===== MFCC → 224x224x3 =====
@@ -500,9 +519,9 @@ class DeepfakeDetectorModule(private val reactCtx: ReactApplicationContext)
     val windowed = FloatArray(FFT_SIZE)
     val fftBuffer = FloatArray(FFT_SIZE * 2) // interleaved re,im
 
-    // 🔧 modulus() 출력용 풀 스펙트럼(= FFT_SIZE)
+    // modulus() 출력: 풀 스펙트럼(= FFT_SIZE)
     val magsFull: FloatArray = FloatArray(FFT_SIZE)
-    // 🔧 실제 사용: 반쪽 스펙트럼(= FFT_SIZE / 2)
+    // 실제 사용: 반쪽 스펙트럼(= FFT_SIZE / 2)
     val nBins = FFT_SIZE / 2
     val mags: FloatArray = FloatArray(nBins)
 
@@ -522,7 +541,7 @@ class DeepfakeDetectorModule(private val reactCtx: ReactApplicationContext)
       fft.forwardTransform(fftBuffer)
       fft.modulus(fftBuffer, magsFull)  // length = FFT_SIZE
 
-      // ✅ 반쪽 스펙트럼만 사용 (0..nBins-1)
+      // 반쪽 스펙트럼만 사용 (0..nBins-1)
       System.arraycopy(magsFull, 0, mags, 0, nBins)
 
       // NaN/Inf guard
