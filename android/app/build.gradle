@@ -1,84 +1,99 @@
+// android/app/build.gradle
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
-/**
- * React Native autolinking
- */
-react {
-    /* Autolinking */
-    autolinkLibrariesWithApp()
-}
+react { autolinkLibrariesWithApp() }
 
-/** Run Proguard on Release builds? */
 def enableProguardInReleaseBuilds = false
-
-/** JSC flavor (Hermes 미사용 시) */
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
 android {
-    ndkVersion rootProject.ext.ndkVersion
-    buildToolsVersion rootProject.ext.buildToolsVersion
-    compileSdk rootProject.ext.compileSdkVersion
+  ndkVersion rootProject.ext.ndkVersion
+  buildToolsVersion rootProject.ext.buildToolsVersion
+  compileSdk rootProject.ext.compileSdkVersion
 
-    namespace "com.deepfake_detection_service_application"
-    defaultConfig {
-        applicationId "com.deepfake_detection_service_application"
-        minSdkVersion rootProject.ext.minSdkVersion
-        targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+  namespace "com.deepfake_detection_service_application"
+
+  defaultConfig {
+    applicationId "com.deepfake_detection_service_application"
+    minSdkVersion rootProject.ext.minSdkVersion
+    targetSdkVersion rootProject.ext.targetSdkVersion
+    versionCode 1
+    versionName "1.0"
+
+    // 필요 ABI만 남기면 용량↓ (권장: arm64-v8a)
+    ndk {
+      abiFilters "arm64-v8a"
+      // 필요 시 추가: "armeabi-v7a","x86","x86_64"
     }
+  }
 
-    signingConfigs {
-        debug {
-            storeFile file('debug.keystore')
-            storePassword 'android'
-            keyAlias 'androiddebugkey'
-            keyPassword 'android'
-        }
-
-        // 🔒 릴리즈 서명(하드코딩)
-        release {
-            // keystore가 android/app 폴더에 있다고 가정
-            storeFile file('my-release-key.keystore')
-            storePassword 'kisook2557'
-            keyAlias 'my-key-alias'
-            keyPassword 'kisook2557'
-        }
+  signingConfigs {
+    debug {
+      storeFile file('debug.keystore')
+      storePassword 'android'
+      keyAlias 'androiddebugkey'
+      keyPassword 'android'
     }
-
-    buildTypes {
-        debug {
-            signingConfig signingConfigs.debug
-        }
-        release {
-            signingConfig signingConfigs.release
-            minifyEnabled enableProguardInReleaseBuilds
-            proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
-        }
+    release {
+      storeFile file('my-release-key.keystore')
+      storePassword 'kisook2557'
+      keyAlias 'my-key-alias'
+      keyPassword 'kisook2557'
     }
+  }
+
+  buildTypes {
+    debug { signingConfig signingConfigs.debug }
+    release {
+      signingConfig signingConfigs.release
+      minifyEnabled enableProguardInReleaseBuilds
+      proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+    }
+  }
+
+  // Java/Kotlin 타깃 일치
+  compileOptions {
+    sourceCompatibility JavaVersion.VERSION_17
+    targetCompatibility JavaVersion.VERSION_17
+  }
+  kotlinOptions { jvmTarget = '17' }
+
+  // .ptl(모바일 Lite) 압축 제외
+  androidResources {
+    noCompress 'ptl'
+  }
+
+  // 네이티브 중복 충돌 회피 (fbjni, c++ shared 등)
+  packagingOptions {
+    pickFirst "**/libfbjni.so"
+    pickFirst "**/libc++_shared.so"
+  }
 }
 
 dependencies {
-    // The version of react-native is set by the React Native Gradle Plugin
-    implementation("com.facebook.react:react-android")
-    implementation project(':react-native-webrtc')
+  implementation("com.facebook.react:react-android")
+  implementation project(':react-native-webrtc')
 
-    // ---- On-device inference (추가) ----
-    implementation "org.tensorflow:tensorflow-lite:2.14.0"
-    implementation "org.tensorflow:tensorflow-lite-support:0.4.4"
-    implementation "org.tensorflow:tensorflow-lite-gpu:2.14.0"      // 선택: GPU delegate
-    // Select TF Ops가 필요하면 아래 주석 해제
-    // implementation "org.tensorflow:tensorflow-lite-select-tf-ops:2.14.0"
-    implementation "be.tarsos.dsp:core:2.5"            // MFCC/FFT
+  // ✅ PyTorch Mobile Lite (1.13.1) - .ptl 로더
+  implementation("org.pytorch:pytorch_android_lite:1.13.1") {
+    // fbjni-java-only 와의 중복 방지
+    exclude group: "com.facebook.fbjni", module: "fbjni-java-only"
+  }
+  // fbjni 정식 아티팩트 명시 (중복 클래스 오류 방지)
+  implementation("com.facebook.fbjni:fbjni:0.7.0")
 
-    if (hermesEnabled.toBoolean()) {
-        implementation("com.facebook.react:hermes-android")
-    } else {
-        implementation jscFlavor
-    }
+  // ❌ 풀런타임(2.x) / torchvision 의존성은 제거 (지금은 .ptl 사용 중)
+  // implementation "org.pytorch:pytorch_android:2.x.x"           ← 삭제
+  // implementation "org.pytorch:pytorch_android_torchvision:..." ← 삭제
+
+  if (hermesEnabled.toBoolean()) {
+    implementation("com.facebook.react:hermes-android")
+  } else {
+    implementation jscFlavor
+  }
 }
 
-// Font configuration
+// 아이콘 폰트
 apply from: "../../node_modules/react-native-vector-icons/fonts.gradle"

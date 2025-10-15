@@ -1,797 +1,485 @@
-// android/app/src/main/java/com/deepvoice/DeepfakeDetectorModule.kt
 package com.deepvoice
 
-import android.app.Activity
 import android.content.Context
-import android.content.Intent
-import android.media.AudioAttributes
-import android.media.AudioFormat
-import android.media.AudioPlaybackCaptureConfiguration
-import android.media.AudioRecord
-import android.media.projection.MediaProjection
-import android.media.projection.MediaProjectionManager
+import android.media.MediaCodec
+import android.media.MediaExtractor
+import android.media.MediaFormat
 import android.net.Uri
-import android.os.Build
 import android.util.Log
-import androidx.annotation.RequiresApi
 import com.facebook.react.bridge.*
-import com.facebook.react.modules.core.DeviceEventManagerModule
-import org.tensorflow.lite.Interpreter
-import org.tensorflow.lite.support.common.FileUtil
-import org.tensorflow.lite.DataType
-import be.tarsos.dsp.util.fft.FFT
-import java.nio.ByteBuffer
+import org.pytorch.IValue
+import org.pytorch.LiteModuleLoader
+import org.pytorch.Module
+import org.pytorch.Tensor
+import java.io.File
+import java.io.FileOutputStream
 import java.nio.ByteOrder
-import java.util.ArrayList
-import java.util.concurrent.ArrayBlockingQueue
-import java.util.concurrent.TimeUnit
-import kotlin.math.PI
-import kotlin.math.cos
-import kotlin.math.floor
-import kotlin.math.abs
-import kotlin.math.ln
+import kotlin.math.*
 
-class DeepfakeDetectorModule(private val reactCtx: ReactApplicationContext)
-  : ReactContextBaseJavaModule(reactCtx), ActivityEventListener {
-
-  init { reactCtx.addActivityEventListener(this) }
-
-  private var tflite: Interpreter? = null
-  private val MODEL_NAME: String = "vgg19_alternative_mode.tflite"
-
-  // Playback capture
-  private var mediaProjection: MediaProjection? = null
-  private var recorder: AudioRecord? = null
-  private var captureThread: Thread? = null
-
-  // Realtime inference
-  private var monitorThread: Thread? = null
-  @Volatile private var monitoring: Boolean = false
-  private val pcmQueue: ArrayBlockingQueue<Short> = ArrayBlockingQueue(16000 * 10)
+// On-device: audio file -> log-mel(80) -> embedder .ptl -> 256D -> siamese .ptl -> [pFake, pReal]
+class DeepfakeDetectorModule(private val reactCtx: ReactApplicationContext) :
+  ReactContextBaseJavaModule(reactCtx) {
 
   override fun getName(): String = "DeepfakeDetector"
 
-  // --- small helpers (avoid Kotlin stdlib isFinite() incompat) ---
-  private fun isFiniteF(x: Float): Boolean = !x.isNaN() && !x.isInfinite()
-  // ---------------------------------------------------------------
+  // ===== assets filenames (Lite .ptl) =====
+  private val EMBEDDER_ASSET = "embedder_mobile.ptl"        // [1,80,T] -> [1,256] (또는 [256])
+  private val SIAMESE_ASSET  = "siamese_mobile.ptl"         // (256,256,256) -> (pFake,pReal) 또는 (pReal,pFake)
+  private val REF_ASSET      = "ref_embeddings_mobile.ptl"  // forward() -> (ref_fake[1,256], ref_real[1,256])
+
+  // ===== PyTorch modules =====
+  @Volatile private var embedder: Module? = null
+  @Volatile private var siamese: Module?  = null
+  @Volatile private var refBundle: Module? = null
+
+  // ===== Stored references (자동 로드됨, JS로 override 가능) =====
+  @Volatile private var refFake: FloatArray? = null
+  @Volatile private var refReal: FloatArray? = null
+
+  // ===== Feature config (WeSpeaker-like, 중요!) =====
+  // WeSpeaker 기본에 맞춰 수정: 16k / 25ms / 10ms / FFT=512 / Hamming / dB+CMN
+  private val SAMPLE_RATE = 16000
+  private val WIN_MS = 25.0
+  private val HOP_MS = 10.0
+  private val N_MELS = 80
+  private val MEL_MIN = -80.0
+  private val MEL_MAX = 0.0
+
+  private val WIN_SIZE = (SAMPLE_RATE * (WIN_MS / 1000.0)).roundToInt() // 400 @16k
+  private val HOP_SIZE = (SAMPLE_RATE * (HOP_MS / 1000.0)).roundToInt() // 160 @16k
+  private val FFT_SIZE = 512
+
+  // 선택 기능(필요시 true): Kaldi 계열과 더 일치시키고 싶을 때
+  private val USE_PREEMPHASIS = false
+  private val PREEMPH_COEF = 0.97f
+  private val USE_DITHER = false
+  private val DITHER_STD = 1.0e-5f
+
+  // 시암 출력 순서가 (real, fake)인 모델이면 true로 변경하세요.
+  // 학습/내보내기 코드 기준이 확실하면 false로 고정.
+  private val SIAMESE_RETURNS_REAL_THEN_FAKE = false
 
   // ===== Public API (JS) =====
 
+  /** 모델 + 기준 임베딩 번들 로드 (권장) */
   @ReactMethod
-  fun initModel(promise: Promise) {
+  fun initModels(promise: Promise) {
     try {
-      if (tflite != null) { logModelIO(); promise.resolve(true); return }
-      val mmap = FileUtil.loadMappedFile(reactCtx, MODEL_NAME)
-
-      // CPU only for stability
-      val opt = Interpreter.Options().apply { setNumThreads(4) }
-      tflite = Interpreter(mmap, opt)
-
-      logModelIO()
+      ensureLoaded()
+      ensureRefsLoaded()
       promise.resolve(true)
     } catch (e: Exception) {
-      Log.e("DeepfakeStep", "initModel failed", e)
-      promise.reject("MODEL_LOAD_FAIL", e)
-    } catch (t: Throwable) {
-      Log.e("DeepfakeStep", "initModel failed (throwable)", t)
-      promise.reject("MODEL_LOAD_FAIL", t)
+      Log.e("Deepfake", "initModels failed", e)
+      promise.reject("INIT_MODELS_ERR", e)
     }
   }
 
+  /** 레거시 호환: initModel() 이름도 허용 */
   @ReactMethod
-  fun requestPlaybackCapture(promise: Promise) {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-      promise.reject("UNSUPPORTED", "Playback capture needs Android 10+")
-      return
-    }
+  fun initModel(promise: Promise) = initModels(promise)
+
+  /** JS에서 ref를 덮어쓰고 싶을 때 사용(선택) */
+  @ReactMethod
+  fun setReferenceEmbeddings(fakeRefEmb: ReadableArray, realRefEmb: ReadableArray, promise: Promise) {
     try {
-      val current: Activity? = currentActivity
-      if (current == null) {
-        promise.reject("NO_ACTIVITY", "No foreground Activity")
-        return
-      }
-      current.startActivity(Intent(current, PlaybackCaptureActivity::class.java))
+      refFake = toFloatArray256(fakeRefEmb)
+      refReal = toFloatArray256(realRefEmb)
       promise.resolve(true)
     } catch (e: Exception) {
-      Log.e("DeepfakeStep", "requestPlaybackCapture failed", e)
-      promise.reject("REQ_CAPTURE_FAIL", e)
-    } catch (t: Throwable) {
-      Log.e("DeepfakeStep", "requestPlaybackCapture failed (throwable)", t)
-      promise.reject("REQ_CAPTURE_FAIL", t)
+      promise.reject("SET_REF_ERR", e)
     }
   }
 
-  @ReactMethod
-  fun startStreamMonitor(remoteTrackId: String?, options: ReadableMap?, promise: Promise) {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-      promise.reject("UNSUPPORTED", "Playback capture needs Android 10+")
-      return
-    }
-    try {
-      ensureModel()
-      if (monitoring) { promise.resolve(true); return }
-
-      startPlaybackRecorder()
-      monitoring = true
-      monitorThread = Thread {
-        try { runInferenceLoop() }
-        catch (t: Throwable) { Log.e("DeepfakeStep", "runInferenceLoop crashed", t) }
-      }
-      monitorThread?.start()
-      promise.resolve(true)
-    } catch (e: Exception) {
-      Log.e("DeepfakeStep", "startStreamMonitor failed", e)
-      promise.reject("STREAM_START_FAIL", e)
-    } catch (t: Throwable) {
-      Log.e("DeepfakeStep", "startStreamMonitor failed (throwable)", t)
-      promise.reject("STREAM_START_FAIL", t)
-    }
-  }
-
-  @ReactMethod
-  fun stopStreamMonitor(promise: Promise) {
-    try {
-      monitoring = false
-      monitorThread?.join(500)
-      monitorThread = null
-      stopPlaybackRecorder()
-      pcmQueue.clear()
-      promise.resolve(true)
-    } catch (e: Exception) {
-      Log.e("DeepfakeStep", "stopStreamMonitor failed", e)
-      promise.reject("STREAM_STOP_FAIL", e)
-    } catch (t: Throwable) {
-      Log.e("DeepfakeStep", "stopStreamMonitor failed (throwable)", t)
-      promise.reject("STREAM_STOP_FAIL", t)
-    }
-  }
-
+  /** 파일 1개 판별 (uriString: content:// 또는 file://) */
   @ReactMethod
   fun detectFromFile(uriString: String, promise: Promise) {
     try {
-      Log.d("DeepfakeStep", "detectFromFile uri=$uriString")
-      ensureModel()
+      ensureLoaded()
+      ensureRefsLoaded()
 
-      // 1) WAV load (PCM/16-bit, any SR; 1ch or 2ch)
-      val wav = readWav16kMono(uriString)
-        ?: throw Exception("지원하지 않는 오디오 형식 (16kHz, mono, 16-bit PCM WAV만 지원)")
-      Log.d("DeepfakeStep", "WAV loaded: samples=${wav.size}")
+      val f = refFake ?: throw IllegalStateException("Ref(fake) not loaded")
+      val r = refReal ?: throw IllegalStateException("Ref(real) not loaded")
 
-      // 2) features → 224x224x3
-      val input: Array<Array<FloatArray>> = computeCnnMFCC(wav)
-      Log.d("DeepfakeStep", "MFCC->img done")
+      val pcm = decodeToMonoFloat(uriString, SAMPLE_RATE)
+      require(pcm.isNotEmpty()) { "Decoded PCM is empty" }
 
-      // 3) inference
-      val prob: Float = runOnce(input)
-      Log.d("DeepfakeStep", "inference prob=$prob")
+      val logMel = computeLogMel(pcm)          // [80, T] dB(-80~0), CMN 전 단계
+      val emb = forwardEmbedder(logMel)        // 256-D
+      val (pFake, pReal) = forwardSiamese(emb, f, r)
 
-      // 4) result
-      val result = Arguments.createMap()
-      result.putDouble("prob_real", prob.toDouble())
-      result.putString("result", if (prob >= 0.5f) "진짜 음성" else "가짜 음성")
-      promise.resolve(result)
+      promise.resolve(makeResultMap(pFake, pReal))
     } catch (e: Exception) {
-      Log.e("DeepfakeStep", "detectFromFile failed", e)
-      promise.reject("DETECT_FAIL", e)
-    } catch (t: Throwable) {
-      Log.e("DeepfakeStep", "detectFromFile failed (throwable)", t)
-      promise.reject("DETECT_FAIL", t)
+      Log.e("Deepfake", "detectFromFile failed", e)
+      promise.reject("DETECT_FILE_ERR", e)
     }
   }
 
-  companion object {
-    fun onProjectionResult(data: Intent) { _lastProjectionData = data }
-    private var _lastProjectionData: Intent? = null
-  }
-  override fun onActivityResult(a: Activity?, r: Int, c: Int, d: Intent?) {}
-  override fun onNewIntent(intent: Intent?) {}
+  // ===== Core =====
 
-  // ===== AudioRecord (Playback capture) =====
-  @RequiresApi(Build.VERSION_CODES.Q)
-  private fun startPlaybackRecorder() {
-    if (recorder != null) return
-    val mpm = reactCtx.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-    val projIntent: Intent = _lastProjectionData ?: throw IllegalStateException("Call requestPlaybackCapture() first")
-    mediaProjection = mpm.getMediaProjection(Activity.RESULT_OK, projIntent)
-
-    val config: AudioPlaybackCaptureConfiguration =
-      AudioPlaybackCaptureConfiguration.Builder(mediaProjection!!)
-        .addMatchingUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
-        .build()
-
-    val srcRate = 48000
-    val minBuf = AudioRecord.getMinBufferSize(
-      srcRate,
-      AudioFormat.CHANNEL_IN_MONO,
-      AudioFormat.ENCODING_PCM_16BIT
-    )
-
-    recorder = AudioRecord.Builder()
-      .setAudioFormat(
-        AudioFormat.Builder()
-          .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-          .setSampleRate(srcRate)
-          .setChannelMask(AudioFormat.CHANNEL_IN_MONO)
-          .build()
-      )
-      .setBufferSizeInBytes(minBuf * 4)
-      .setAudioPlaybackCaptureConfig(config)
-      .build()
-
-    recorder?.startRecording()
-
-    captureThread = Thread {
-      try {
-        val buf = ShortArray(2048)
-        while (recorder != null && recorder?.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
-          val n = recorder!!.read(buf, 0, buf.size)
-          if (n > 0) {
-            var i = 0
-            // 48k → 16k decimate by 3
-            while (i + 2 < n) {
-              pcmQueue.offer(buf[i])
-              i += 3
-            }
-          } else {
-            try { Thread.sleep(5) } catch (_: InterruptedException) {}
-          }
-        }
-      } catch (t: Throwable) {
-        Log.e("DeepfakeStep", "captureThread crashed", t)
-      }
+  @Synchronized
+  private fun ensureLoaded() {
+    if (embedder == null) {
+      val p = assetFilePath(reactCtx, EMBEDDER_ASSET)
+      embedder = LiteModuleLoader.load(p)
+      Log.i("Deepfake", "Loaded embedder: $p")
     }
-    captureThread?.start()
-  }
-
-  private fun stopPlaybackRecorder() {
-    recorder?.let {
-      try { it.stop() } catch (_: Throwable) {}
-      try { it.release() } catch (_: Throwable) {}
-    }
-    recorder = null
-
-    mediaProjection?.let {
-      try { it.stop() } catch (_: Throwable) {}
-    }
-    mediaProjection = null
-
-    captureThread?.let {
-      try { it.join(200) } catch (_: InterruptedException) {}
-    }
-    captureThread = null
-  }
-
-  // ===== Realtime inference loop =====
-  private fun runInferenceLoop() {
-    val sr = 16000
-    val windowMs = 1000
-    val samplesPerWin = sr * windowMs / 1000
-    val floatBuf = FloatArray(samplesPerWin)
-    val shortTmp = ShortArray(samplesPerWin)
-
-    while (monitoring) {
-      var got = 0
-      while (got < samplesPerWin && monitoring) {
-        val s: Short? = pcmQueue.poll(10, TimeUnit.MILLISECONDS)
-        if (s != null) {
-          shortTmp[got] = s
-          got++
-        }
-      }
-      if (!monitoring) break
-
-      var i = 0
-      while (i < samplesPerWin) {
-        floatBuf[i] = shortTmp[i] / 32768f
-        i++
-      }
-
-      val input: Array<Array<FloatArray>> = computeCnnMFCC(floatBuf)
-      val prob: Float = runOnce(input)
-
-      val map = Arguments.createMap()
-      map.putDouble("prob_real", prob.toDouble())
-      map.putString("decision", if (prob >= 0.5f) "real" else "fake")
-      map.putInt("windowMs", windowMs)
-      map.putDouble("timestamp", System.currentTimeMillis().toDouble())
-      emitEvent("DeepfakeVerdict", map)
+    if (siamese == null) {
+      val p = assetFilePath(reactCtx, SIAMESE_ASSET)
+      siamese = LiteModuleLoader.load(p)
+      Log.i("Deepfake", "Loaded siamese:  $p")
     }
   }
 
-  private fun emitEvent(name: String, data: WritableMap) {
-    reactCtx
-      .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-      .emit(name, data)
+  /** ref_embeddings_mobile.ptl에서 refFake/refReal 자동 로드 */
+  @Synchronized
+  private fun ensureRefsLoaded() {
+    if (refFake != null && refReal != null) return
+
+    if (refBundle == null) {
+      val p = assetFilePath(reactCtx, REF_ASSET)
+      refBundle = LiteModuleLoader.load(p)
+      Log.i("Deepfake", "Loaded ref bundle: $p")
+    }
+    // TorchScript forward() 0-arg 호출 → tuple(ref_fake[1,256], ref_real[1,256])
+    val tup = refBundle!!.forward().toTuple()
+    val rf = tup[0].toTensor().dataAsFloatArray
+    val rr = tup[1].toTensor().dataAsFloatArray
+    require(rf.size == 256 && rr.size == 256) { "Ref bundle must contain 256-D tensors" }
+    refFake = rf
+    refReal = rr
   }
 
-  // ===== Single-shot inference =====
-  private fun ensureModel() {
-    if (tflite == null) throw IllegalStateException("Call initModel() first")
-  }
+  /** 임베더: log-mel [N_MELS, T] -> FloatArray(256) */
+  private fun forwardEmbedder(logMel: Array<FloatArray>): FloatArray {
+    val T = if (logMel.isNotEmpty()) logMel[0].size else 0
+    require(T > 0) { "Empty log-mel" }
 
-  /**
-   * 입력: 224x224x3 (HWC) float(0~1) 그레이 3채널
-   * 출력: [1,1] 또는 [1,2] (이진/소프트맥스 모두 허용)
-   */
-  private fun runOnce(inputHWC: Array<Array<FloatArray>>): Float {
-    val interpreter = tflite ?: throw IllegalStateException("Model not initialized")
-
-    val inTensor = interpreter.getInputTensor(0)
-    val inShape  = inTensor.shape()
-    val inType   = inTensor.dataType()
-    if (inType != DataType.FLOAT32) {
-      throw IllegalStateException("Model expects FLOAT32, got $inType")
-    }
-    if (inShape.size != 4 || inShape[1] != 224 || inShape[2] != 224 || inShape[3] != 3) {
-      interpreter.resizeInput(0, intArrayOf(1, 224, 224, 3))
-      interpreter.allocateTensors()
+    // (1) CMN: 각 멜 차원별 시간 평균 제거
+    val cmn = Array(N_MELS) { FloatArray(T) }
+    for (m in 0 until N_MELS) {
+      var mean = 0.0
+      for (t in 0 until T) mean += logMel[m][t]
+      mean /= max(1, T)
+      for (t in 0 until T) cmn[m][t] = (logMel[m][t] - mean).toFloat()
     }
 
-    // fill input
-    val inBuf = ByteBuffer.allocateDirect(4 * 224 * 224 * 3).order(ByteOrder.nativeOrder())
-    var i = 0
-    while (i < 224) {
-      var j = 0
-      while (j < 224) {
-        val px = inputHWC[i][j]
-        val r = if (!px[0].isNaN() && !px[0].isInfinite()) px[0].coerceIn(0f, 1f) else 0f
-        val g = if (!px[1].isNaN() && !px[1].isInfinite()) px[1].coerceIn(0f, 1f) else 0f
-        val b = if (!px[2].isNaN() && !px[2].isInfinite()) px[2].coerceIn(0f, 1f) else 0f
-        inBuf.putFloat(r); inBuf.putFloat(g); inBuf.putFloat(b)
-        j++
-      }
-      i++
-    }
-    inBuf.rewind()
-
-    // ==== 출력 shape에 맞춰 정확한 객체로 받기 ====
-    val outTensor = interpreter.getOutputTensor(0)
-    val outShape  = outTensor.shape()   // e.g., [1,1] or [1,2]
-    val rank = outShape.size
-
-    var prob = 0f
-    try {
-      when (rank) {
-        1 -> {
-          val out = FloatArray(outShape[0].coerceAtLeast(1))
-          interpreter.run(inBuf, out)
-          prob = out.getOrElse(if (out.size > 1) 1 else 0) { 0f }
-        }
-        2 -> {
-          val out = Array(outShape[0]) { FloatArray(outShape[1]) }
-          interpreter.run(inBuf, out)
-          prob = if (outShape[1] == 1) out[0][0] else out[0].getOrElse(1) { out[0][0] }
-        }
-        else -> {
-          val last = outShape.last()
-          val out = Array(outShape[0]) { FloatArray(last) }
-          interpreter.run(inBuf, out)
-          prob = if (last == 1) out[0][0] else out[0].getOrElse(1) { out[0][0] }
-        }
-      }
-    } catch (t: Throwable) {
-      Log.e("DeepfakeRun", "TFLite run() failed: ${t.javaClass.simpleName}: ${t.message}", t)
-      throw t
-    }
-
-    if (prob.isNaN() || prob.isInfinite()) prob = 0.5f
-    return prob.coerceIn(0f, 1f)
-  }
-
-  // 모델 IO 스펙 로그
-  private fun logModelIO() {
-    try {
-      val it = tflite ?: return
-      val inT = it.getInputTensor(0)
-      val outT = it.getOutputTensor(0)
-      Log.i("DeepfakeIO", "IN: ${inT.dataType()} ${inT.shape().contentToString()} / OUT: ${outT.dataType()} ${outT.shape().contentToString()}")
-    } catch (_: Throwable) { /* ignore */ }
-  }
-
-  // ===== WAV 16k mono → FloatArray =====
-  /**
-   * PCM(1) + 16bit. 채널 1/2 허용. 샘플레이트는 임의 → 16kHz로 리샘플.
-   */
-  private fun readWav16kMono(uriString: String): FloatArray? {
-    val uri = Uri.parse(uriString)
-    val ins = if (uri.scheme == "content") reactCtx.contentResolver.openInputStream(uri)
-              else java.io.FileInputStream(uri.path)
-    if (ins == null) return null
-    val all = ins.readBytes().also { ins.close() }
-    if (all.size < 44 || String(all.copyOfRange(0,4)) != "RIFF" || String(all.copyOfRange(8,12)) != "WAVE") {
-      Log.e("DeepfakeStep", "Not a RIFF/WAVE")
-      return null
-    }
-
-    var p = 12
-    var fmtFound = false
-    var audioFormat = -1
-    var numChannels = -1
-    var sampleRate = -1
-    var bitsPerSample = -1
-    var dataOffset = -1
-    var dataSize = -1
-
-    while (p + 8 <= all.size) {
-      val id = String(all.copyOfRange(p, p+4))
-      val sz = ByteBuffer.wrap(all, p+4, 4).order(ByteOrder.LITTLE_ENDIAN).getInt()
-      val body = p + 8
-      when (id) {
-        "fmt " -> {
-          fmtFound = true
-          if (sz >= 16) {
-            audioFormat   = ByteBuffer.wrap(all, body + 0,  2).order(ByteOrder.LITTLE_ENDIAN).getShort().toInt() and 0xFFFF
-            numChannels   = ByteBuffer.wrap(all, body + 2,  2).order(ByteOrder.LITTLE_ENDIAN).getShort().toInt() and 0xFFFF
-            sampleRate    = ByteBuffer.wrap(all, body + 4,  4).order(ByteOrder.LITTLE_ENDIAN).getInt()
-            bitsPerSample = ByteBuffer.wrap(all, body + 14, 2).order(ByteOrder.LITTLE_ENDIAN).getShort().toInt() and 0xFFFF
-          }
-        }
-        "data" -> {
-          dataOffset = body
-          dataSize = sz
-          break
-        }
-      }
-      p += 8 + sz
-    }
-
-    if (!fmtFound || dataOffset < 0 || dataSize <= 0) {
-      Log.e("DeepfakeStep", "fmt/data chunk not found")
-      return null
-    }
-    // PCM 16bit만 허용
-    if (audioFormat != 1 || bitsPerSample != 16) {
-      Log.e("DeepfakeStep", "Unsupported WAV fmt: format=$audioFormat, ch=$numChannels, sr=$sampleRate, bps=$bitsPerSample")
-      return null
-    }
-    if (numChannels != 1 && numChannels != 2) {
-      Log.e("DeepfakeStep", "Unsupported channels: $numChannels")
-      return null
-    }
-
-    val bb = ByteBuffer.wrap(all, dataOffset, dataSize).order(ByteOrder.LITTLE_ENDIAN)
-
-    // 1) 모노 신호 추출 (2ch → (L+R)/2 다운믹스)
-    val mono: FloatArray = if (numChannels == 1) {
-      val frames = dataSize / 2
-      val out = FloatArray(frames)
-      var i = 0
-      while (i < frames && bb.remaining() >= 2) { out[i] = bb.getShort() / 32768f; i++ }
-      out
-    } else {
-      val frames = dataSize / 4
-      val out = FloatArray(frames)
-      var i = 0
-      while (i < frames && bb.remaining() >= 4) {
-        val l = bb.getShort().toInt()
-        val r = bb.getShort().toInt()
-        out[i] = ((l + r) / 2.0f) / 32768f
-        i++
-      }
-      out
-    }
-
-    // 2) 16kHz로 리샘플
-    return if (sampleRate == 16000) {
-      mono
-    } else {
-      val res = resampleLinear(mono, sampleRate, 16000)
-      Log.d("DeepfakeStep", "Resampled ${sampleRate}→16000, in=${mono.size}, out=${res.size}")
-      res
-    }
-  }
-
-  // 간단한 선형 보간 리샘플러 (srcRate → dstRate)
-  private fun resampleLinear(input: FloatArray, srcRate: Int, dstRate: Int): FloatArray {
-    if (input.isEmpty() || srcRate <= 0 || dstRate <= 0) return FloatArray(0)
-    if (srcRate == dstRate) return input.copyOf()
-
-    val ratio = dstRate.toDouble() / srcRate.toDouble()
-    val outLen = kotlin.math.max(1, kotlin.math.floor(input.size * ratio).toInt())
-    val out = FloatArray(outLen)
-
-    var i = 0
-    while (i < outLen) {
-      val srcPos = i / ratio
-      val i0 = kotlin.math.floor(srcPos).toInt().coerceIn(0, input.size - 1)
-      val i1 = (i0 + 1).coerceAtMost(input.size - 1)
-      val frac = (srcPos - i0)
-      val v = (input[i0] * (1.0 - frac) + input[i1] * frac).toFloat()
-      out[i] = if (isFiniteF(v)) v else 0f
-      i++
-    }
-    return out
-  }
-
-  // ===== MFCC → 224x224x3 =====
-  private fun computeCnnMFCC(pcm: FloatArray): Array<Array<FloatArray>> {
-    val SAMPLE_RATE = 16000
-    val FRAME = 400   // 25 ms @ 16k
-    val HOP = 160     // 10 ms @ 16k
-    val N_MFCC = 64
-    val MEL_FILTERS = 40
-    val FFT_SIZE = 512
-
-    val fft = FFT(FFT_SIZE)
-
-    val timeFeats: ArrayList<FloatArray> = ArrayList()
+    // (2) 그대로 텐서 생성 (0~1 스케일링 없음)
+    val input = FloatArray(N_MELS * T)
     var idx = 0
-    val windowed = FloatArray(FFT_SIZE)
-    val fftBuffer = FloatArray(FFT_SIZE * 2) // interleaved re,im
+    for (m in 0 until N_MELS) for (t in 0 until T) input[idx++] = cmn[m][t]
+    val x = Tensor.fromBlob(input, longArrayOf(1, N_MELS.toLong(), T.toLong()))
 
-    // modulus() 출력: 풀 스펙트럼(= FFT_SIZE)
-    val magsFull: FloatArray = FloatArray(FFT_SIZE)
-    // 실제 사용: 반쪽 스펙트럼(= FFT_SIZE / 2)
-    val nBins = FFT_SIZE / 2
-    val mags: FloatArray = FloatArray(nBins)
-
-    var frameIndex = 0
-    while (idx + FRAME <= pcm.size) {
-      // window & zero-pad
-      java.util.Arrays.fill(windowed, 0f)
-      val win: FloatArray = hamming(pcm, idx, FRAME)
-      System.arraycopy(win, 0, windowed, 0, FRAME)
-
-      // real → interleaved re/im
-      java.util.Arrays.fill(fftBuffer, 0f)
-      var w = 0; var b = 0
-      while (w < FFT_SIZE) { fftBuffer[b] = windowed[w]; b += 2; w++ }
-
-      // FFT → magnitude(full)
-      fft.forwardTransform(fftBuffer)
-      fft.modulus(fftBuffer, magsFull)  // length = FFT_SIZE
-
-      // 반쪽 스펙트럼만 사용 (0..nBins-1)
-      System.arraycopy(magsFull, 0, mags, 0, nBins)
-
-      // NaN/Inf guard
-      var badMags = 0
-      var mi = 0
-      while (mi < mags.size) {
-        val v = mags[mi]
-        if (!isFiniteF(v) || v < 0f) { mags[mi] = 0f; badMags++ }
-        mi++
-      }
-      if (frameIndex % 50 == 0) {
-        Log.d("DeepfakeStep", "FFT ok frame=$frameIndex badMags=$badMags")
-      }
-
-      // MFCC (mel power → log → DCT)
-      val mfccs: FloatArray = try {
-        computeMFCCFromSpectrum(
-          mags = mags,                // 256 bins
-          sampleRate = SAMPLE_RATE,
-          fftSize = FFT_SIZE,
-          nMels = MEL_FILTERS,
-          nMfcc = N_MFCC
-        )
-      } catch (t: Throwable) {
-        Log.e("DeepfakeStep", "computeMFCCFromSpectrum failed at frame=$frameIndex", t)
-        throw t
-      }
-
-      // 안정적 로그/클램프
-      val row = FloatArray(N_MFCC)
-      var k = 0
-      while (k < N_MFCC) {
-        val v0 = if (k < mfccs.size) mfccs[k] else 0f
-        val vSafe = if (!isFiniteF(v0)) 0f else abs(v0)
-        var vv = ln((if (vSafe <= 1e-6f) 1e-6f else vSafe).toDouble()).toFloat()
-        if (!isFiniteF(vv)) vv = 0f
-        row[k] = vv
-        k++
-      }
-      timeFeats.add(row)
-
-      idx += HOP
-      frameIndex++
-    }
-
-    // list -> array
-    val specList: ArrayList<FloatArray> = ArrayList(timeFeats.size)
-    var r0 = 0
-    while (r0 < timeFeats.size) {
-      val row = FloatArray(N_MFCC)
-      val srcRow = timeFeats[r0]
-      val copyLen = if (srcRow.size < N_MFCC) srcRow.size else N_MFCC
-      System.arraycopy(srcRow, 0, row, 0, copyLen)
-      specList.add(row)
-      r0++
-    }
-    val spec: Array<FloatArray> = specList.toTypedArray()
-
-    val img: Array<FloatArray> = bilinearResizeAndNorm(spec, 224, 224)
-
-    // out: 224x224x3 (grayscale→3ch) + NaN guard
-    val outRows: ArrayList<Array<FloatArray>> = ArrayList(224)
-    var r = 0
-    while (r < 224) {
-      val colList: ArrayList<FloatArray> = ArrayList(224)
-      var c = 0
-      while (c < 224) {
-        val v0 = img[r][c]
-        val v = if (isFiniteF(v0)) v0.coerceIn(0f, 1f) else 0f
-        val triple = FloatArray(3)
-        triple[0] = v; triple[1] = v; triple[2] = v
-        colList.add(triple)
-        c++
-      }
-      outRows.add(colList.toTypedArray())
-      r++
-    }
-    return outRows.toTypedArray()
+    val y = embedder!!.forward(IValue.from(x)).toTensor().dataAsFloatArray
+    require(y.size == 256) { "Embedder output must be 256-D, got ${y.size}" }
+    return y
   }
 
-  private fun hamming(src: FloatArray, off: Int, n: Int): FloatArray {
-    val out = FloatArray(n)
-    val twoPi: Double = 2.0 * PI
-    var i = 0
-    while (i < n) {
-      val w = 0.54 - 0.46 * cos(twoPi * i / (n - 1).toDouble())
-      var v = src[off + i] * w.toFloat()
-      if (!isFiniteF(v)) v = 0f
-      out[i] = v
-      i++
+  /** 시암: 256D×3 -> (pFake, pReal) */
+  private fun forwardSiamese(anchor: FloatArray, fakeRef: FloatArray, realRef: FloatArray): Pair<Float, Float> {
+    val shape = longArrayOf(1, 256)
+    val tA = Tensor.fromBlob(anchor, shape)
+    val tF = Tensor.fromBlob(fakeRef, shape)
+    val tR = Tensor.fromBlob(realRef, shape)
+    val tuple = siamese!!.forward(IValue.from(tA), IValue.from(tF), IValue.from(tR)).toTuple()
+
+    var first = tuple[0].toTensor().dataAsFloatArray.getOrNull(0) ?: 0f
+    var second = tuple[1].toTensor().dataAsFloatArray.getOrNull(0) ?: 0f
+
+    // 모델이 (real, fake) 순서를 낸다면 스와핑
+    if (SIAMESE_RETURNS_REAL_THEN_FAKE) {
+      val tmp = first; first = second; second = tmp
     }
-    return out
+
+    val pFake = first
+    val pReal = second
+    return pFake to pReal
   }
 
-  private fun bilinearResizeAndNorm(src: Array<FloatArray>, h: Int, w: Int): Array<FloatArray> {
-    val sh: Int = src.size
-    val sw: Int = if (sh > 0) src[0].size else 1
-
-    val outList: ArrayList<FloatArray> = ArrayList(h)
-    var y = 0
-    while (y < h) { outList.add(FloatArray(w)); y++ }
-
-    var mn = Float.POSITIVE_INFINITY
-    var mx = Float.NEGATIVE_INFINITY
-
-    y = 0
-    while (y < h) {
-      val gy = (y.toFloat() * (sh - 1f)) / (h - 1f)
-      val y0 = floor(gy.toDouble()).toInt().coerceIn(0, sh - 1)
-      val y1 = if (y0 + 1 < sh) y0 + 1 else sh - 1
-      val wy = (gy - y0).toFloat()
-
-      var x = 0
-      while (x < w) {
-        val gx = (x.toFloat() * (sw - 1f)) / (w - 1f)
-        val x0 = floor(gx.toDouble()).toInt().coerceIn(0, sw - 1)
-        val x1 = if (x0 + 1 < sw) x0 + 1 else sw - 1
-        val wx = (gx - x0).toFloat()
-
-        val a = src[y0][x0]
-        val b = src[y0][x1]
-        val c = src[y1][x0]
-        val d = src[y1][x1]
-
-        var v = ((1f - wy) * ((1f - wx) * a + wx * b) + wy * ((1f - wx) * c + wx * d))
-        if (!isFiniteF(v)) v = 0f
-        outList[y][x] = v
-
-        if (v < mn) mn = v
-        if (v > mx) mx = v
-        x++
-      }
-      y++
-    }
-
-    val s = mx - mn
-    if (s > 1e-6f && isFiniteF(mn) && isFiniteF(mx)) {
-      y = 0
-      while (y < h) {
-        var x2 = 0
-        while (x2 < w) {
-          var z = (outList[y][x2] - mn) / s
-          if (!isFiniteF(z)) z = 0f
-          outList[y][x2] = z
-          x2++
+  // ===== Audio decode (file/content URI -> mono float @ targetSr) =====
+  private fun decodeToMonoFloat(uriStr: String, targetSr: Int): FloatArray {
+    val uri = Uri.parse(uriStr)
+    val resolver = reactCtx.contentResolver
+    val extractor = MediaExtractor()
+    try {
+      when (uri.scheme) {
+        "file" -> extractor.setDataSource(uri.path!!)
+        else -> resolver.openFileDescriptor(uri, "r")!!.use { pfd ->
+          extractor.setDataSource(pfd.fileDescriptor)
         }
-        y++
       }
-    } else {
-      y = 0
-      while (y < h) { java.util.Arrays.fill(outList[y], 0f); y++ }
+      var track = -1
+      for (i in 0 until extractor.trackCount) {
+        val fmt = extractor.getTrackFormat(i)
+        val mime = fmt.getString(MediaFormat.KEY_MIME) ?: ""
+        if (mime.startsWith("audio/")) { track = i; break }
+      }
+      require(track >= 0) { "No audio track" }
+      extractor.selectTrack(track)
+
+      val mime = extractor.getTrackFormat(track).getString(MediaFormat.KEY_MIME)!!
+      val decoder = MediaCodec.createDecoderByType(mime)
+      decoder.configure(extractor.getTrackFormat(track), null, null, 0)
+      decoder.start()
+
+      val pcm = ArrayList<Float>()
+      val info = MediaCodec.BufferInfo()
+      var sawInputEOS = false
+      var sawOutputEOS = false
+      var outCh = 1
+      var outSr = targetSr
+
+      while (!sawOutputEOS) {
+        if (!sawInputEOS) {
+          val inIndex = decoder.dequeueInputBuffer(10_000)
+          if (inIndex >= 0) {
+            val buf = decoder.getInputBuffer(inIndex)!!
+            val sampleSize = extractor.readSampleData(buf, 0)
+            if (sampleSize < 0) {
+              decoder.queueInputBuffer(inIndex, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+              sawInputEOS = true
+            } else {
+              decoder.queueInputBuffer(inIndex, 0, sampleSize, extractor.sampleTime, 0)
+              extractor.advance()
+            }
+          }
+        }
+        val outIndex = decoder.dequeueOutputBuffer(info, 10_000)
+        if (outIndex >= 0) {
+          val outBuf = decoder.getOutputBuffer(outIndex)!!
+          if (info.size > 0) {
+            val outFormat = decoder.outputFormat
+            val ch = outFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+            val sr = outFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+            outCh = ch; outSr = sr
+
+            // PCM 16-bit little-endian 가정
+            val shortCount = info.size / 2
+            val sb = outBuf.order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
+            val tmp = ShortArray(shortCount)
+            sb.get(tmp, 0, shortCount)
+
+            var i = 0
+            while (i < tmp.size) {
+              var sum = 0f
+              for (c in 0 until ch) {
+                val v = tmp.getOrNull(i + c)?.toFloat() ?: 0f
+                sum += v
+              }
+              var mono = (sum / ch) / 32768f
+
+              // 선택: dither / pre-emphasis
+              if (USE_DITHER) {
+                mono += (Math.random().toFloat() * 2f - 1f) * DITHER_STD
+              }
+              if (USE_PREEMPHASIS) {
+                // pre-emphasis는 frame단위 대신 연속 신호에 적용(간단 구현)
+                // 실제 CMVN 파이프라인과 다른 세부는 무시
+                // (정확히 맞추려면 파이썬에서 프론트엔드 포함해 .ptl로 묶는 것이 최선)
+              }
+
+              pcm.add(mono)
+              i += ch
+            }
+          }
+          decoder.releaseOutputBuffer(outIndex, false)
+          if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) sawOutputEOS = true
+        }
+      }
+      decoder.stop()
+      decoder.release()
+      extractor.release()
+
+      val mono = pcm.toFloatArray()
+      return if (outSr == targetSr) mono else resampleLinear(mono, outSr, targetSr)
+    } catch (e: Exception) {
+      try { extractor.release() } catch (_: Exception) {}
+      throw e
     }
-    return outList.toTypedArray()
   }
 
-  // ===== Simple MFCC (mel filterbank + log + DCT-II) =====
-  private fun computeMFCCFromSpectrum(
-    mags: FloatArray,
-    sampleRate: Int,
-    fftSize: Int,
-    nMels: Int,
-    nMfcc: Int
-  ): FloatArray {
-    val melFilters = buildMelFilterBank(sampleRate, fftSize, nMels)
-
-    val melEnergies = FloatArray(nMels)
-    var m = 0
-    while (m < nMels) {
-      var sum = 0.0
-      val filt = melFilters[m]
-      val len = mags.size.coerceAtMost(filt.size)
-      var k = 0
-      while (k < len) {
-        val p = mags[k].toDouble()
-        val pp = if (p.isFinite() && p >= 0.0) p else 0.0
-        sum += (pp * pp) * filt[k] // power spectrum
-        k++
-      }
-      val logged = ln((if (sum <= 1e-10) 1e-10 else sum)).toFloat()
-      melEnergies[m] = if (!logged.isNaN() && !logged.isInfinite()) logged else 0f
-      m++
-    }
-    val out = dctTypeII(melEnergies, nMfcc)
-    var i = 0
-    while (i < out.size) {
-      if (!isFiniteF(out[i])) out[i] = 0f
-      i++
+  private fun resampleLinear(src: FloatArray, srcSr: Int, dstSr: Int): FloatArray {
+    if (srcSr == dstSr || src.isEmpty()) return src
+    val ratio = dstSr.toDouble() / srcSr
+    val outLen = max(1, floor(src.size * ratio).toInt())
+    val out = FloatArray(outLen)
+    for (i in 0 until outLen) {
+      val pos = i / ratio
+      val i0 = floor(pos).toInt().coerceIn(0, src.size - 1)
+      val i1 = min(i0 + 1, src.size - 1)
+      val frac = (pos - i0).toFloat()
+      out[i] = src[i0] * (1 - frac) + src[i1] * frac
     }
     return out
   }
 
-  private fun buildMelFilterBank(sampleRate: Int, fftSize: Int, nMels: Int): Array<DoubleArray> {
-    val nFftBins = fftSize / 2
-    val fMin = 20.0
-    val fMax = sampleRate / 2.0
+  // ===== Log-mel (80, 25ms/10ms, Hamming, clamp[-80,0], 0~1 스케일 X) =====
+  private fun computeLogMel(xIn: FloatArray): Array<FloatArray> {
+    // 선택: pre-emphasis (간단 적용)
+    val x = if (USE_PREEMPHASIS && xIn.isNotEmpty()) {
+      val y = FloatArray(xIn.size)
+      y[0] = xIn[0]
+      for (i in 1 until xIn.size) y[i] = xIn[i] - PREEMPH_COEF * xIn[i - 1]
+      y
+    } else xIn
 
-    fun hzToMel(f: Double) = 2595.0 * Math.log10(1.0 + f / 700.0)
-    fun melToHz(m: Double) = 700.0 * (Math.pow(10.0, m / 2595.0) - 1.0)
-
-    val melMin = hzToMel(fMin)
-    val melMax = hzToMel(fMax)
-    val melPoints = DoubleArray(nMels + 2)
-    for (i in 0 until nMels + 2) {
-      melPoints[i] = melMin + (melMax - melMin) * i / (nMels + 1)
+    val frames = frameSignal(x, WIN_SIZE, HOP_SIZE)
+    val hamming = FloatArray(WIN_SIZE) { i ->
+      (0.54f - 0.46f * kotlin.math.cos(2.0 * Math.PI * i / (WIN_SIZE - 1))).toFloat()
     }
 
-    val bin = IntArray(nMels + 2)
-    for (i in 0 until nMels + 2) {
-      val hz = melToHz(melPoints[i])
-      bin[i] = Math.floor((fftSize + 1) * hz / (2.0 * sampleRate)).toInt().coerceIn(0, nFftBins - 1)
+    val spec = Array(frames.size) { FloatArray(FFT_SIZE / 2 + 1) }
+    val re = FloatArray(FFT_SIZE)
+    val im = FloatArray(FFT_SIZE)
+    val tw = precomputeTwiddles(FFT_SIZE)
+
+    for (t in frames.indices) {
+      java.util.Arrays.fill(re, 0f); java.util.Arrays.fill(im, 0f)
+      for (i in 0 until WIN_SIZE) re[i] = frames[t][i] * hamming[i]
+      fftRadix2(re, im, tw)
+      for (k in 0..FFT_SIZE/2) {
+        val p = re[k]*re[k] + im[k]*im[k]
+        spec[t][k] = p
+      }
     }
 
-    val filters = Array(nMels) { DoubleArray(nFftBins) }
+    val melFb = melFilterBank(SAMPLE_RATE, FFT_SIZE, N_MELS, 20.0, SAMPLE_RATE / 2.0)
+    val T = frames.size
+    val mel = Array(N_MELS) { FloatArray(T) }
+    for (m in 0 until N_MELS) {
+      for (t in 0 until T) {
+        var s = 0f
+        for (pair in melFb[m]) {
+          val idx = pair.first
+          val w = pair.second
+          s += w * spec[t][idx]
+        }
+        var db = (10.0 * ln((s.toDouble() + 1e-10)) / ln(10.0)).toFloat() // 10*log10(power)
+        if (db.isNaN() || db.isInfinite()) db = -80f
+        mel[m][t] = db.coerceIn(MEL_MIN.toFloat(), MEL_MAX.toFloat())
+      }
+    }
+    return mel
+  }
+
+  private fun frameSignal(x: FloatArray, win: Int, hop: Int): Array<FloatArray> {
+    if (x.isEmpty()) return arrayOf(FloatArray(win))
+    if (x.size < win) return arrayOf(x.copyOf(win)) // zero-pad
+    val nFrames = 1 + (x.size - win) / hop
+    val out = Array(nFrames) { FloatArray(win) }
+    var start = 0
+    for (t in 0 until nFrames) {
+      System.arraycopy(x, start, out[t], 0, win)
+      start += hop
+    }
+    return out
+  }
+
+  private data class Tw(val c: FloatArray, val s: FloatArray)
+  private fun precomputeTwiddles(n: Int): Tw {
+    val c = FloatArray(n / 2); val s = FloatArray(n / 2)
+    for (i in 0 until n / 2) {
+      val ang = -2.0 * Math.PI * i / n
+      c[i] = kotlin.math.cos(ang).toFloat()
+      s[i] = kotlin.math.sin(ang).toFloat()
+    }
+    return Tw(c, s)
+  }
+  private fun fftRadix2(re: FloatArray, im: FloatArray, tw: Tw) {
+    val n = re.size
+    var j = 0
+    for (i in 1 until n - 1) {
+      var bit = n shr 1
+      while (j >= bit) { j -= bit; bit = bit shr 1 }
+      j += bit
+      if (i < j) {
+        val tr = re[i]; re[i] = re[j]; re[j] = tr
+        val ti = im[i]; im[i] = im[j]; im[j] = ti
+      }
+    }
+    var len = 2
+    while (len <= n) {
+      val half = len / 2
+      val step = n / len
+      var i = 0
+      while (i < n) {
+        var k = 0
+        for (j2 in i until i + half) {
+          val tpre = re[j2 + half] * tw.c[k] - im[j2 + half] * tw.s[k]
+          val tpim = re[j2 + half] * tw.s[k] + im[j2 + half] * tw.c[k]
+          re[j2 + half] = re[j2] - tpre
+          im[j2 + half] = im[j2] - tpim
+          re[j2] += tpre
+          im[j2] += tpim
+          k += step
+        }
+        i += len
+      }
+      len = len shl 1
+    }
+  }
+
+  private fun hz2mel(hz: Double) = 2595.0 * ln(1.0 + hz / 700.0) / ln(10.0)
+  private fun mel2hz(m: Double) = 700.0 * (10.0.pow(m / 2595.0) - 1.0)
+
+  private fun melFilterBank(sr: Int, nFft: Int, nMels: Int, fmin: Double, fmax: Double): Array<Array<Pair<Int, Float>>> {
+    val mMin = hz2mel(fmin)
+    val mMax = hz2mel(fmax)
+    val mpts = DoubleArray(nMels + 2) { i -> mMin + (mMax - mMin) * i / (nMels + 1) }
+    val fpts = DoubleArray(nMels + 2) { i -> mel2hz(mpts[i]) }
+    val bins = IntArray(nMels + 2) { i -> floor((nFft + 1) * fpts[i] / sr).toInt().coerceIn(0, nFft / 2) }
+
+    val fb = Array(nMels) { ArrayList<Pair<Int, Float>>() }
     for (m in 1..nMels) {
-      val f_m_minus = bin[m - 1]
-      val f_m = bin[m]
-      val f_m_plus = bin[m + 1]
+      val f_m_minus = bins[m - 1]
+      val f_m = bins[m]
+      val f_m_plus = bins[m + 1]
 
-      var k = f_m_minus
-      while (k < f_m) {
-        val denom = (f_m - f_m_minus).toDouble().coerceAtLeast(1.0)
-        filters[m - 1][k] = (k - f_m_minus).toDouble() / denom
-        k++
+      for (k in f_m_minus until f_m) {
+        val w = (k - f_m_minus).toFloat() / (f_m - f_m_minus).toFloat().coerceAtLeast(1f)
+        fb[m - 1].add(Pair(k, w))
       }
-      while (k <= f_m_plus && k < nFftBins) {
-        val denom = (f_m_plus - f_m).toDouble().coerceAtLeast(1.0)
-        filters[m - 1][k] = (f_m_plus - k).toDouble() / denom
-        k++
+      for (k in f_m until f_m_plus) {
+        val w = (f_m_plus - k).toFloat() / (f_m_plus - f_m).toFloat().coerceAtLeast(1f)
+        fb[m - 1].add(Pair(k, w))
       }
     }
-    return filters
+    return Array(nMels) { fb[it].toTypedArray() }
   }
 
-  private fun dctTypeII(src: FloatArray, nCoeffs: Int): FloatArray {
-    val N = src.size
-    val out = FloatArray(nCoeffs)
-    val factor = Math.PI / N
-    var k = 0
-    while (k < nCoeffs) {
-      var sum = 0.0
-      var n = 0
-      while (n < N) {
-        sum += src[n] * Math.cos((n + 0.5) * k * factor)
-        n++
-      }
-      var v = (sum * Math.sqrt(2.0 / N)).toFloat()
-      if (!isFiniteF(v)) v = 0f
-      out[k] = v
-      k++
-    }
+  // ===== helpers =====
+
+  private fun toFloatArray256(arr: ReadableArray): FloatArray {
+    require(arr.size() == 256) { "Embedding must be 256-D" }
+    val out = FloatArray(256)
+    for (i in 0 until 256) out[i] = arr.getDouble(i).toFloat()
     return out
+  }
+
+  private fun makeResultMap(pFake: Float, pReal: Float): WritableMap {
+    val map = Arguments.createMap()
+    map.putDouble("pFake", pFake.toDouble())
+    map.putDouble("pReal", pReal.toDouble())
+    val margin = (pFake - pReal)
+    map.putDouble("margin", margin.toDouble())
+    map.putString("label", if (pFake > pReal + 0.05f) "fake" else "real")
+    return map
+  }
+
+  /** assets -> 내부저장소 복사 후 경로 반환 (PyTorch Lite Module.load 용) */
+  private fun assetFilePath(context: Context, assetName: String): String {
+    val file = File(context.filesDir, assetName)
+    if (file.exists() && file.length() > 0) return file.absolutePath
+    context.assets.open(assetName).use { inp ->
+      FileOutputStream(file).use { out ->
+        val buffer = ByteArray(4 * 1024)
+        while (true) {
+          val read = inp.read(buffer)
+          if (read <= 0) break
+          out.write(buffer, 0, read)
+        }
+        out.flush()
+      }
+    }
+    return file.absolutePath
   }
 }

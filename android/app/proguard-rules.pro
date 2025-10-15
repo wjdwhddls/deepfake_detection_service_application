@@ -11,3 +11,5 @@
 -keep class org.webrtc.** { *; }
 -keep class org.webrtc.** { *; }
 -dontwarn org.webrtc.**
+-keep class org.pytorch.** { *; }
+-keep class com.facebook.soloader.** { *; }

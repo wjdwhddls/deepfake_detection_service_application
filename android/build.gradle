@@ -5,13 +5,14 @@ buildscript {
     compileSdkVersion = 35
     targetSdkVersion = 35
     ndkVersion = "27.1.12297006"
-    kotlinVersion = "1.9.24"   // ok (AGP 8.8과 호환)
+    kotlinVersion = "1.9.24"  // AGP 8.8와 호환
   }
   repositories {
     google()
     mavenCentral()
-    maven { url = uri('https://mvn.0110.be/releases') } // TarsosDSP  ← '=' 로 교체
-    // maven { url = uri('https://jitpack.io') }        // 쓰면 유지(= 로 교체)
+    // ↓ Groovy 문법으로 통일 (필요 없으면 주석/삭제 가능)
+    // maven { url 'https://mvn.0110.be/releases' }   // TarsosDSP
+    // maven { url 'https://jitpack.io' }
   }
   dependencies {
     classpath("com.android.tools.build:gradle:8.8.0")
@@ -24,8 +25,9 @@ allprojects {
   repositories {
     mavenCentral()
     google()
-    maven { url = uri('https://mvn.0110.be/releases') } // ← '=' 로 교체
-    // maven { url = uri('https://jitpack.io') }        // ← '=' 로 교체
+    // ↓ 필요 시에만 유지
+    // maven { url 'https://mvn.0110.be/releases' }   // TarsosDSP
+    // maven { url 'https://jitpack.io' }
   }
 }
 
