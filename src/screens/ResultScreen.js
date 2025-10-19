@@ -27,24 +27,12 @@ const PALETTE = {
   danger1: '#EF4444', danger2: '#B91C1C',
 };
 
-// 0~1 범위로 보정
-const clamp01 = (v) => {
-  if (typeof v !== 'number' || Number.isNaN(v) || !Number.isFinite(v)) return 0;
-  return Math.min(1, Math.max(0, v));
+// 안전/주의/위험별 안내
+const DEFAULT_STEPS = {
+  safe:   ['중요 결론 전, 한 번 더 사실 확인.', '의심 링크/앱 설치는 피하세요.', 'OTP·인증번호 등 민감 정보 공유 금지.'],
+  warn:   ['통화를 끊고 공식 번호로 재확인.', '재촉·압박하면 즉시 중단하세요.', '앱 설치/원격 제어 요구는 거절.'],
+  danger: ['즉시 통화 종료 및 번호 차단.', '112 또는 1392(사기피해 신고센터) 신고.', '송금·비밀번호 즉시 변경 등 긴급 조치.'],
 };
-
-function levelFromRealProb(pReal) {
-  if (pReal >= 0.8) {
-    return { key: 'safe', title: '안전', emoji: '✅', colors: [PALETTE.safe1, PALETTE.safe2], desc: '진짜일 가능성이 높습니다.',
-      steps: ['중요 결론 전, 한 번 더 사실 확인.', '의심 링크/앱 설치는 피하세요.', 'OTP·인증번호 등 민감 정보 공유 금지.'] };
-  }
-  if (pReal >= 0.5) {
-    return { key: 'warn', title: '주의', emoji: '⚠️', colors: [PALETTE.warn1, PALETTE.warn2], desc: '추가 확인이 필요합니다.',
-      steps: ['통화를 끊고 공식 번호로 재확인.', '재촉·압박하면 즉시 중단하세요.', '앱 설치/원격 제어 요구는 거절.'] };
-  }
-  return { key: 'danger', title: '위험', emoji: '⛔️', colors: [PALETTE.danger1, PALETTE.danger2], desc: '가짜/사기 의심이 큽니다.',
-    steps: ['즉시 통화 종료 및 번호 차단.', '112 또는 1392(사기피해 신고센터) 신고.', '송금·비밀번호 즉시 변경 등 긴급 조치.'] };
-}
 
 const CircleBadge = ({ title, percent, colors }) => {
   const SIZE = Math.min(280, Math.max(220, width * 0.68));
@@ -78,12 +66,12 @@ const CircleBadge = ({ title, percent, colors }) => {
 };
 
 const ResultScreen = ({ route }) => {
-  const resultData = route.params?.result;  // 네이티브 결과 객체
-  useTheme(); // (흐름 유지용)
+  useTheme(); // 흐름 유지
+  const shot = route?.params?.result;   // 🔒 HomeScreen에서 만든 스냅샷만 사용
 
   const bg = [PALETTE.g1, PALETTE.g2, PALETTE.g3];
 
-  if (!resultData) {
+  if (!shot) {
     return (
       <LinearGradient colors={bg} style={styles.fillCenter}>
         <View style={styles.empty}>
@@ -93,20 +81,9 @@ const ResultScreen = ({ route }) => {
     );
   }
 
-  // ✅ 코틀린의 prob가 prob_real로 넘어옴. 혹시 대비해 별칭 키도 체크.
-  const rawReal =
-    typeof resultData.prob_real === 'number' ? resultData.prob_real
-    : typeof resultData.pReal === 'number' ? resultData.pReal
-    : typeof resultData.prob === 'number' ? resultData.prob
-    : typeof resultData.real === 'number' ? resultData.real
-    : typeof resultData.score === 'number' ? resultData.score
-    : 0;
-
-  const probReal = clamp01(rawReal);
-  const realPct  = Math.round(probReal * 100);
-  const fakePct  = 100 - realPct;
-  const level    = levelFromRealProb(probReal);
-  const resultStr = typeof resultData.result === 'string' ? resultData.result : '-';
+  // 스냅샷에서 값만 꺼내 사용 (재계산 금지)
+  const { probReal, realPct, fakePct, verdict, resultText } = shot;
+  const steps = DEFAULT_STEPS[verdict?.key] ?? DEFAULT_STEPS.warn;
 
   return (
     <LinearGradient colors={bg} style={styles.fill}>
@@ -121,28 +98,27 @@ const ResultScreen = ({ route }) => {
             {/* 1) 한눈에 판단 */}
             <View style={[styles.card, { alignItems: 'center' }]}>
               <Text style={styles.sectionTitle}>
-                {level.emoji} {level.title}
+                {verdict?.emoji ?? 'ℹ️'} {verdict?.label ?? '결과'}
               </Text>
-              <Text style={styles.sectionDesc}>{level.desc}</Text>
+              <Text style={styles.sectionDesc}>{verdict?.desc ?? ''}</Text>
 
               <View style={{ height: 22 }} />
-              <CircleBadge title="가짜(위·변조) 확률" percent={fakePct} colors={level.colors} />
+              <CircleBadge title="가짜(위·변조) 확률" percent={fakePct ?? (100 - (realPct ?? 0))} colors={verdict?.colors ?? [PALETTE.safe1, PALETTE.safe2]} />
 
               <View style={styles.dualRow}>
                 <View style={styles.kv}>
                   <Text style={styles.kKey}>분류 결과</Text>
-                  <Text style={styles.kVal}>{resultStr}</Text>
+                  <Text style={styles.kVal}>{resultText ?? verdict?.label ?? '-'}</Text>
                 </View>
                 <View style={styles.kv}>
                   <Text style={styles.kKey}>Real 확률</Text>
-                  <Text style={styles.kVal}>{realPct}%</Text>
+                  <Text style={styles.kVal}>{(realPct ?? Math.round((probReal ?? 0) * 100))}%</Text>
                 </View>
               </View>
 
-              {/* 🔍 원시 확률값(0~1)도 함께 노출: 디버깅/검증용 */}
               <View style={[styles.kv, { marginTop: 12, width: '100%' }]}>
                 <Text style={styles.kKey}>Raw pReal (0~1)</Text>
-                <Text style={styles.kVal}>{probReal.toFixed(4)}</Text>
+                <Text style={styles.kVal}>{(probReal ?? 0).toFixed(4)}</Text>
               </View>
             </View>
 
@@ -153,10 +129,10 @@ const ResultScreen = ({ route }) => {
 
               <View style={styles.actionsBodyTop} />
 
-              {level.steps.map((t, i) => (
-                <View key={i} style={styles.stepRow}>
-                  <View style={[styles.stepIndex, { borderColor: level.colors[0] }]}>
-                    <Text style={[styles.stepIndexText, { color: level.colors[0] }]}>{i + 1}</Text>
+              {steps.map((t, i) => (
+                <View key={`${verdict?.key}-${i}`} style={styles.stepRow}>
+                  <View style={[styles.stepIndex, { borderColor: (verdict?.colors ?? [PALETTE.safe1])[0] }]}>
+                    <Text style={[styles.stepIndexText, { color: (verdict?.colors ?? [PALETTE.safe1])[0] }]}>{i + 1}</Text>
                   </View>
                   <Text style={styles.stepText}>{t}</Text>
                 </View>

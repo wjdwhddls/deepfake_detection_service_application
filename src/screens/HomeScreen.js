@@ -1,4 +1,5 @@
-// src/screens/HomeScreen.js
+// 기존 대비용 주석 유지
+
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
@@ -16,13 +17,58 @@ import {
   SafeAreaView,
   StatusBar,
   BackHandler,
+  PermissionsAndroid,
 } from 'react-native';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import LinearGradient from 'react-native-linear-gradient';
-import { pick } from '@react-native-documents/picker';
-import { request, PERMISSIONS, RESULTS } from 'react-native-permissions';
 import RNFS from 'react-native-fs';
 import LogoImage from '../assets/Detection.png';
+
+/** ===== (추가) Dev 전용 도우미: 배터리/디바이스 정보 시도 ===== */
+let DeviceInfo = null;
+try {
+  DeviceInfo = require('react-native-device-info');
+} catch {}
+
+/** ===== (추가) Document Picker 동적 로딩 (둘 중 설치된 것 사용) ===== */
+let DocumentPickerMod = null;
+try {
+  // 공식 패키지 우선
+  DocumentPickerMod = require('react-native-document-picker');
+} catch {}
+if (!DocumentPickerMod) {
+  try {
+    // 네가 처음 쓰던 패키지(있다면)
+    DocumentPickerMod = require('@react-native-documents/picker');
+  } catch {}
+}
+
+async function pickOneFile(opts = {}) {
+  if (!DocumentPickerMod) {
+    Alert.alert(
+      '문서 선택기 미설치',
+      '파일 선택 모듈이 없습니다. react-native-document-picker를 설치하세요.'
+    );
+    throw new Error('DocumentPicker not installed');
+  }
+
+  // react-native-document-picker(v9+) 형태 우선
+  if (typeof DocumentPickerMod.pickSingle === 'function') {
+    return await DocumentPickerMod.pickSingle({ ...opts });
+  }
+  if (typeof DocumentPickerMod.pick === 'function') {
+    const res = await DocumentPickerMod.pick({ allowMultiSelection: false, ...opts });
+    return Array.isArray(res) ? res[0] : res;
+  }
+
+  // @react-native-documents/picker 형태 (API 동일 가정)
+  if (DocumentPickerMod?.pick) {
+    const res = await DocumentPickerMod.pick({ mode: 'import', ...opts });
+    return Array.isArray(res) ? res[0] : res;
+  }
+
+  Alert.alert('문서 선택기 오류', '지원되지 않는 DocumentPicker 인터페이스입니다.');
+  throw new Error('Unsupported DocumentPicker interface');
+}
 
 /** ===== 팔레트 ===== */
 const PALETTE = {
@@ -42,7 +88,92 @@ const PALETTE = {
   track: 'rgba(255,255,255,0.18)',
 };
 
-/** 오디오 이퀄라이저 배경 */
+const clamp01 = (v) => {
+  if (typeof v !== 'number' || Number.isNaN(v) || !Number.isFinite(v)) return 0;
+  return Math.min(1, Math.max(0, v));
+};
+
+function verdictFromProb(probReal) {
+  const p = clamp01(probReal);
+  if (p >= 0.8) {
+    return { key: 'safe', label: '안전', emoji: '✅', colors: [PALETTE.success1, PALETTE.success2], desc: '진짜일 가능성이 높습니다.', tierIndex: 2 };
+  }
+  if (p >= 0.5) {
+    return { key: 'warn', label: '주의', emoji: '⚠️', colors: [PALETTE.warn1, PALETTE.warn2], desc: '추가 확인이 필요합니다.', tierIndex: 1 };
+  }
+  return { key: 'danger', label: '위험', emoji: '⛔️', colors: [PALETTE.danger1, PALETTE.danger2], desc: '가짜/사기 의심이 큽니다.', tierIndex: 0 };
+}
+
+function normalizeResult(nativeRes) {
+  const rawReal =
+    typeof nativeRes?.prob_real === 'number' ? nativeRes.prob_real :
+    typeof nativeRes?.pReal === 'number'      ? nativeRes.pReal :
+    typeof nativeRes?.prob === 'number'       ? nativeRes.prob :
+    typeof nativeRes?.real === 'number'       ? nativeRes.real :
+    typeof nativeRes?.score === 'number'      ? nativeRes.score :
+    0;
+
+  const probReal = clamp01(rawReal);
+  const realPct  = Math.round(probReal * 100);
+  const fakePct  = 100 - realPct;
+  const verdict  = verdictFromProb(probReal);
+
+  return {
+    raw: nativeRes ?? {},
+    probReal,
+    realPct,
+    fakePct,
+    verdict,
+    resultText: typeof nativeRes?.result === 'string' ? nativeRes.result : verdict.label,
+  };
+}
+
+/** Dev 전용 메트릭 로깅 (안전 버전: table/group 미사용, 순수 log) */
+async function logDevMetrics({ label = 'Detect', tStart, tEnd }) {
+  if (!__DEV__) return;
+
+  const ms = Math.max(0, (tEnd ?? Date.now()) - (tStart ?? Date.now()));
+  const latencyMs = Math.round(ms);
+
+  let batteryLevel = null;
+  let isCharging = null;
+
+  try {
+    if (DeviceInfo?.getPowerState) {
+      const ps = await DeviceInfo.getPowerState();
+      if (typeof ps?.batteryLevel === 'number') batteryLevel = ps.batteryLevel;
+      if (typeof ps?.charging === 'boolean') isCharging = ps.charging;
+    } else if (DeviceInfo?.getBatteryLevel) {
+      batteryLevel = await DeviceInfo.getBatteryLevel();
+    }
+  } catch {}
+
+  let cpu = null;
+  try {
+    const { PerfStats } = NativeModules;
+    if (PerfStats?.getCpuUsage) cpu = await PerfStats.getCpuUsage(); // { total, app, sampleMs }
+  } catch {}
+
+  const payload = {
+    label,
+    latencyMs,
+    batteryPct: batteryLevel != null ? Math.round(batteryLevel * 100) : null,
+    charging: isCharging,
+    cpuTotal: cpu?.total ?? null,
+    cpuApp: cpu?.app ?? null,
+    cpuSampleMs: cpu?.sampleMs ?? null,
+    platform: Platform.OS,
+  };
+
+  try {
+    const safe = JSON.parse(JSON.stringify(payload));
+    console.log(`[DEV][metrics]`, safe);
+  } catch {
+    console.log(`[DEV][metrics]`, payload);
+  }
+}
+
+/** 오디오 이퀄라이저 */
 const EqualizerBackground = ({ styles, variant = 'center' }) => {
   const BAR_COUNT = 11;
   const vals = useRef(Array.from({ length: BAR_COUNT }, () => new Animated.Value(0))).current;
@@ -56,7 +187,8 @@ const EqualizerBackground = ({ styles, variant = 'center' }) => {
       ]);
       Animated.loop(seq).start();
     });
-  }, [vals]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const containerStyle = variant === 'center' ? styles.eqCenterContainer : styles.eqBottomContainer;
 
@@ -79,38 +211,21 @@ const EqualizerBackground = ({ styles, variant = 'center' }) => {
   );
 };
 
-/** 확률 → 단계 매핑 */
-function verdictFromProb(probReal) {
-  const p = typeof probReal === 'number' ? probReal : 0;
-  if (p >= 0.8) {
-    return { key: 'safe', label: '안전', emoji: '✅', colors: [PALETTE.success1, PALETTE.success2], desc: '진짜일 가능성이 높습니다.', tierIndex: 2 };
-  }
-  if (p >= 0.5) {
-    return { key: 'warn', label: '주의', emoji: '⚠️', colors: [PALETTE.warn1, PALETTE.warn2], desc: '추가 확인이 필요합니다.', tierIndex: 1 };
-  }
-  return { key: 'danger', label: '위험', emoji: '⛔️', colors: [PALETTE.danger1, PALETTE.danger2], desc: '가짜/사기 의심이 큽니다.', tierIndex: 0 };
-}
-
 const { DeepfakeDetector } = NativeModules;
 
-const HomeScreen = () => {
-  const [resultData, setResultData] = useState(null);
+const HomeScreen = ({ navigation }) => {
+  const [snapshot, setSnapshot] = useState(null);
   const [showUploadButton, setShowUploadButton] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // 결과 모달
   const [resultVisible, setResultVisible] = useState(false);
   const sheetAnim = useRef(new Animated.Value(0)).current;
 
-  const navigation = useNavigation();
-
-  // ===== Animations =====
   const logoFloat = useRef(new Animated.Value(0)).current;
   const detectPress = useRef(new Animated.Value(0)).current;
   const pulse = useRef(new Animated.Value(0)).current;
   const uploadReveal = useRef(new Animated.Value(0)).current;
 
-  // ✅ 모델 초기화: 1회만, 실패 시에도 재시도 루프 없음
   const initOnceRef = useRef(false);
   useEffect(() => {
     let mounted = true;
@@ -121,7 +236,7 @@ const HomeScreen = () => {
         await DeepfakeDetector.initModel();
         if (mounted) initOnceRef.current = true;
       } catch (e) {
-        console.warn('initModel failed:', e?.message || e);
+        console.log('initModel failed:', e?.message || String(e));
         Alert.alert('오류', '모델 초기화에 실패했습니다.');
       }
     };
@@ -129,19 +244,38 @@ const HomeScreen = () => {
     return () => { mounted = false; };
   }, []);
 
-  // ✅ 화면 포커스 될 때 UI/세션 리셋
-  useFocusEffect(
-    React.useCallback(() => {
-      setResultData(null);
+  // 🔁 화면 포커스될 때 초기화: navigation listener 사용
+  const backSubRef = useRef(null);
+  useEffect(() => {
+    const onFocus = () => {
+      setSnapshot(null);
       setLoading(false);
       setShowUploadButton(false);
       try { DeepfakeDetector?.resetSession?.(); } catch {}
-      const sub = BackHandler.addEventListener('hardwareBackPress', () => { setLoading(false); setResultData(null); return false; });
-      return () => sub.remove();
-    }, [])
-  );
+      backSubRef.current?.remove?.();
+      backSubRef.current = BackHandler.addEventListener('hardwareBackPress', () => {
+        setLoading(false);
+        setSnapshot(null);
+        return false;
+      });
+    };
 
-  // 로고 부유
+    const onBlur = () => {
+      backSubRef.current?.remove?.();
+      backSubRef.current = null;
+    };
+
+    const unsubFocus = navigation?.addListener?.('focus', onFocus);
+    const unsubBlur  = navigation?.addListener?.('blur', onBlur);
+
+    onFocus();
+    return () => {
+      unsubFocus && unsubFocus();
+      unsubBlur && unsubBlur();
+      onBlur();
+    };
+  }, [navigation]);
+
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
@@ -151,7 +285,6 @@ const HomeScreen = () => {
     ).start();
   }, [logoFloat]);
 
-  // 맥박 링
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
@@ -172,14 +305,23 @@ const HomeScreen = () => {
     }).start();
   };
 
+  // === 권한 요청: react-native-permissions 완전 제거, PermissionsAndroid만 사용 ===
   const requestFilePermissionIfNeeded = async () => {
     if (Platform.OS !== 'android') return true;
-    if (Platform.Version >= 33) {
-      const r = await request(PERMISSIONS.ANDROID.READ_MEDIA_AUDIO);
-      return r === RESULTS.GRANTED;
-    } else {
-      const r = await request(PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE);
-      return r === RESULTS.GRANTED;
+    const API = Number(Platform.Version) || 0;
+
+    try {
+      const perm =
+        API >= 33
+          ? 'android.permission.READ_MEDIA_AUDIO'
+          : 'android.permission.READ_EXTERNAL_STORAGE';
+
+      const granted = await PermissionsAndroid.request(perm);
+      return granted === PermissionsAndroid.RESULTS.GRANTED;
+    } catch (e) {
+      console.log('권한 요청 오류:', e?.message || String(e));
+      // 권한 모듈 문제 시, 막지 않고 진행
+      return true;
     }
   };
 
@@ -204,9 +346,11 @@ const HomeScreen = () => {
   };
 
   const handleUpload = async () => {
+    const t0 = (global.performance?.now?.() ?? Date.now());
+
     try {
       setLoading(true);
-      setResultData(null);
+      setSnapshot(null);
 
       const permissionGranted = await requestFilePermissionIfNeeded();
       if (!permissionGranted) {
@@ -214,56 +358,61 @@ const HomeScreen = () => {
         return;
       }
 
-      const picked = await pick({ mode: 'import' });
-      const pickResult = Array.isArray(picked) ? picked[0] : null;
-      if (!pickResult) return;
+      // ✅ 설치된 문서 선택기 사용
+      const picked = await pickOneFile({
+        // type: DocumentPicker.types.audio // (react-native-document-picker 사용 시 활성화 가능)
+      });
+      if (!picked) return;
 
       if (!DeepfakeDetector || !DeepfakeDetector.detectFromFile) {
         Alert.alert('오류', '온디바이스 모듈을 사용할 수 없습니다.');
         return;
       }
 
-      const isWav =
-        (pickResult?.mimeType || '').toLowerCase().includes('wav') ||
-        (pickResult?.name || '').toLowerCase().endsWith('.wav');
+      const mime = (picked?.type || picked?.mimeType || '').toLowerCase();
+      const name = (picked?.name || '').toLowerCase();
+      const isWav = mime.includes('wav') || name.endsWith('.wav');
       if (!isWav) {
         Alert.alert('형식 안내', '현재는 WAV 파일만 지원합니다. (16kHz/mono 권장)');
         return;
       }
 
-      // ✅ 매번 새로운 캐시 파일로 복사 후 분석 (Android의 content:// 대응)
       const cachedPath = `${RNFS.CachesDirectoryPath}/upload-${Date.now()}.wav`;
-      await RNFS.copyFile(pickResult.uri, cachedPath);
+      await RNFS.copyFile(picked.uri, cachedPath);
       const fileUri = Platform.OS === 'android' ? `file://${cachedPath}` : cachedPath;
 
-      const res = await DeepfakeDetector.detectFromFile(fileUri);
-      setResultData(res);
+      const nativeRes = await DeepfakeDetector.detectFromFile(fileUri);
+      const shot = normalizeResult(nativeRes);
+      setSnapshot(shot);
       openResultSheet();
     } catch (e) {
-      console.error('온디바이스 분석 오류:', e);
+      console.log('온디바이스 분석 오류:', e?.message || String(e));
       Alert.alert('오류', '분석 중 문제가 발생했습니다.');
     } finally {
       setLoading(false);
       setShowUploadButton(true);
+      const t1 = (global.performance?.now?.() ?? Date.now());
+      logDevMetrics({ label: 'Detect', tStart: t0, tEnd: t1 });
     }
   };
 
   const handleReset = () => {
     closeResultSheet();
-    setResultData(null);
+    setSnapshot(null);
     setLoading(false);
     setShowUploadButton(true);
     try { DeepfakeDetector?.resetSession?.(); } catch {}
   };
 
   const handleDetailView = () => {
+    if (!snapshot) return;
     closeResultSheet();
-    navigation.navigate('DetectDetail', { result: resultData });
+    // ✅ 고정 경로
+    navigation?.navigate?.('DetectDetail', { result: snapshot });
   };
 
   const styles = getStyles();
 
-  // 파생 애니메이션 스타일
   const logoTranslateY = logoFloat.interpolate({ inputRange: [0, 1], outputRange: [0, -6] });
   const pressScale = detectPress.interpolate({ inputRange: [0, 1], outputRange: [1, 0.98] });
   const uploadTranslate = uploadReveal.interpolate({ inputRange: [0, 1], outputRange: [10, 0] });
@@ -271,9 +420,7 @@ const HomeScreen = () => {
   const pulseScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.5] });
   const pulseOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.28, 0] });
 
-  // 결과 계산(단계)
-  const probReal = typeof resultData?.prob_real === 'number' ? resultData.prob_real : 0;
-  const v = verdictFromProb(probReal); // {key,label,emoji,colors,desc,tierIndex}
+  const verdict = snapshot?.verdict ?? verdictFromProb(0.5);
 
   return (
     <View style={styles.container}>
@@ -344,17 +491,15 @@ const HomeScreen = () => {
             >
               <View style={styles.handle} />
 
-              {/* 단계 카드 */}
-              <LinearGradient colors={v.colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.verdictCard}>
-                <Text style={styles.verdictEmoji}>{v.emoji}</Text>
-                <Text style={styles.verdictText}>{v.label}</Text>
-                <Text style={styles.verdictDesc}>{v.desc}</Text>
+              <LinearGradient colors={verdict.colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.verdictCard}>
+                <Text style={styles.verdictEmoji}>{verdict.emoji ?? 'ℹ️'}</Text>
+                <Text style={styles.verdictText}>{verdict.label ?? '결과'}</Text>
+                <Text style={styles.verdictDesc}>{verdict.desc ?? '결과를 확인하세요.'}</Text>
               </LinearGradient>
 
-              {/* 3단계 인디케이터 */}
               <View style={styles.tierRow}>
                 {['위험', '주의', '안전'].map((t, idx) => {
-                  const active = idx === v.tierIndex;
+                  const active = idx === (verdict.tierIndex ?? 1);
                   return (
                     <View key={t} style={[styles.tierPill, active && styles.tierPillActive]}>
                       <Text style={[styles.tierText, active && styles.tierTextActive]}>{t}</Text>
@@ -363,9 +508,8 @@ const HomeScreen = () => {
                 })}
               </View>
 
-              {/* 버튼 */}
               <View style={styles.sheetButtons}>
-                <TouchableOpacity style={styles.detailBtn} onPress={handleDetailView}>
+                <TouchableOpacity style={styles.detailBtn} onPress={handleDetailView} disabled={!snapshot}>
                   <Text style={styles.detailBtnText}>상세보기</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.confirmBtn} onPress={handleReset}>
@@ -422,11 +566,7 @@ const getStyles = () =>
     uploadButtonText: { fontSize: 15, fontWeight: '700', color: PALETTE.white },
 
     /** 모달 루트(상태바까지 덮음) */
-    modalRoot: {
-      flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.6)',
-      justifyContent: 'flex-end',
-    },
+    modalRoot: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
     sheetContainer: { flex: 1, justifyContent: 'flex-end' },
 
     /** 바텀시트 */

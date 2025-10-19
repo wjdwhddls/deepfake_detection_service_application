@@ -23,6 +23,7 @@
     "react-dom": "19.0.0",
     "react-native": "0.78.0",
     "react-native-animatable": "^1.4.0",
+    "react-native-document-picker": "^9.3.1",
     "react-native-elements": "^3.4.3",
     "react-native-file-picker": "^0.0.21",
     "react-native-fs": "^2.20.0",
