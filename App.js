@@ -1,7 +1,7 @@
 // App.js
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Modal, TouchableOpacity, View, StyleSheet, NativeModules, NativeEventEmitter,
+  Modal, TouchableOpacity, View, StyleSheet, NativeModules, NativeEventEmitter, DevSettings,
 } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -209,20 +209,33 @@ const App = () => {
 
   useEffect(() => { checkPermissions(); }, []);
 
-  // 앱 레벨에서 1회 모델 로드 (실패해도 앱은 계속)
+  // 앱 레벨에서 1회 모델 로드 + 시암 자가검증
   useEffect(() => {
     (async () => {
       try {
         if (DeepfakeDetector?.initModel) {
           await DeepfakeDetector.initModel();
           console.log('[App] Deepfake model initialized');
+          if (DeepfakeDetector?.debugSiameseWithRefs) {
+            await DeepfakeDetector.debugSiameseWithRefs();
+          }
         } else {
           console.log('[App] DeepfakeDetector native module not found');
         }
       } catch (e) {
-        console.warn('[App] Deepfake model init failed:', e?.message || e);
+        console.warn('[App] Deepfake model init/debug failed:', e?.message || e);
       }
     })();
+  }, []);
+
+  // Dev Menu에서 수동 실행 메뉴 추가 (개발 중 편의)
+  useEffect(() => {
+    if (DeepfakeDetector?.debugSiameseWithRefs) {
+      DevSettings.addMenuItem('Run Siamese Self-Test', async () => {
+        try { await DeepfakeDetector.debugSiameseWithRefs(); }
+        catch (e) { console.warn('[App] debugSiameseWithRefs error:', e?.message || e); }
+      });
+    }
   }, []);
 
   // 이벤트로 경고 제어
@@ -252,7 +265,6 @@ const App = () => {
     setUserPhoneNumber(phoneNumber);
     setIsLoggedIn(true);
 
-    // ✅ 충돌 해결: 환경에 따라 자동 선택
     const webSocket = io(SERVER_URL);
     webSocket.on('connect', () => {
       console.log('[Socket] Connected');
