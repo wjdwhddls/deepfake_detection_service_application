@@ -2,9 +2,8 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator,
-  SafeAreaView, KeyboardAvoidingView, Platform, Dimensions, Image
+  SafeAreaView, KeyboardAvoidingView, Platform, Dimensions, Image,
 } from 'react-native';
-import axios from 'axios';
 import LinearGradient from 'react-native-linear-gradient';
 import { api } from '../lib/config';
 
@@ -16,9 +15,17 @@ const C = {
 };
 
 const UserGenderEnum = { MAN: 'MAN', WOMAN: 'WOMAN' };
-
 const { width: W, height: H } = Dimensions.get('window');
 const MAX = Math.max(W, H);
+
+// 서버 정규식과 맞춤(대/소문자+숫자+특수문자, 8~20자)
+const PW_REGEX = /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,20}$/;
+// 닉네임 정규식
+const NAME_REGEX = /^[0-9a-zA-Z가-힣]+$/;
+// 전화번호 정규식
+const TEL_REGEX = /^010-\d{4}-\d{4}$/;
+// 간단 이메일 체크(서버에서도 검증함)
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const SignUpScreen = ({ navigation }) => {
   const [name, setName] = useState('');
@@ -30,49 +37,85 @@ const SignUpScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
 
   const handleSignUp = async () => {
-    if (!name || !email || !password || !confirmPassword || !tel) {
+    const username = name.trim();
+    const user_id = email.trim().toLowerCase();
+    const user_pw = password.trim();
+    const confirm = confirmPassword.trim();
+    const telTrim = tel.trim();
+
+    // 빈값
+    if (!username || !user_id || !user_pw || !confirm || !telTrim) {
       Alert.alert('오류', '모든 필드를 입력하세요.');
       return;
     }
-    if (password !== confirmPassword) {
+    // 이메일
+    if (!EMAIL_REGEX.test(user_id)) {
+      Alert.alert('오류', '이메일 형식이 올바르지 않습니다.');
+      return;
+    }
+    // 비밀번호 일치
+    if (user_pw !== confirm) {
       Alert.alert('오류', '비밀번호가 일치하지 않습니다.');
+      return;
+    }
+    // 비밀번호 규칙(8~20자)
+    if (!PW_REGEX.test(user_pw)) {
+      Alert.alert(
+        '오류',
+        '비밀번호는 8~20자이며 대문자/소문자/숫자/특수문자를 모두 포함해야 합니다.'
+      );
+      return;
+    }
+    // 닉네임 규칙
+    if (!NAME_REGEX.test(username) || username.length < 2 || username.length > 20) {
+      Alert.alert('오류', '닉네임은 2~20자의 한글/영문/숫자만 사용할 수 있습니다.');
+      return;
+    }
+    // 전화번호 형식
+    if (!TEL_REGEX.test(telTrim)) {
+      Alert.alert('오류', "핸드폰 번호는 '010-xxxx-xxxx' 형식으로 입력해 주세요.");
       return;
     }
 
     setLoading(true);
 
+    // 서버 DTO와 필드명/값 정확히 일치
     const requestData = {
-      user_id: email,
-      user_pw: password,
-      username: name,
-      gender,
-      tel,
-      role: 'USER',
+      user_id,
+      user_pw,
+      username,
+      gender,       // 'MAN' | 'WOMAN'
+      tel: telTrim, // '010-1234-5678'
+      role: 'USER', // UserRole.USER
     };
 
     try {
-      const response = await api.post(`/api/users/`, requestData);
-      if (response.status === 201) {
+      const res = await api.post('/api/users', requestData);
+
+      if (res.status === 201 || res.data?.success) {
         Alert.alert('회원가입 성공!', '계정이 성공적으로 생성되었습니다!');
         navigation.navigate('Login');
       } else {
         const msg =
-          typeof response.data === 'string' ? response.data :
-          (Array.isArray(response.data) ? response.data.join(', ') :
-          (response.data?.message || '회원가입 중 오류가 발생했습니다.'));
+          typeof res.data === 'string'
+            ? res.data
+            : Array.isArray(res.data)
+            ? res.data.join(', ')
+            : res.data?.message || '회원가입 중 오류가 발생했습니다.';
         Alert.alert('회원가입 실패', msg);
       }
     } catch (err) {
-      let message = '회원가입 중 오류가 발생했습니다.';
-      if (err.response) {
-        if (typeof err.response.data === 'string') message = err.response.data;
-        else if (Array.isArray(err.response.data)) message = err.response.data.join(', ');
-        else if (typeof err.response.data === 'object' && err.response.data !== null)
-          message = Object.values(err.response.data).join(', ');
-      } else if (err.request) {
-        message = '서버에 연결할 수 없습니다.';
-      }
-      Alert.alert('회원가입 실패', message);
+      const msg =
+        err?.friendlyMessage ||
+        (err?.response?.data &&
+          (Array.isArray(err.response.data)
+            ? err.response.data.join(', ')
+            : typeof err.response.data === 'object'
+            ? Object.values(err.response.data).join(', ')
+            : String(err.response.data))) ||
+        err?.message ||
+        '회원가입 중 오류가 발생했습니다.';
+      Alert.alert('회원가입 실패', msg);
     } finally {
       setLoading(false);
     }
@@ -118,7 +161,10 @@ const SignUpScreen = ({ navigation }) => {
             <TextInput
               style={styles.inputText}
               placeholder="이름" placeholderTextColor="#8FB2E8"
-              value={name} onChangeText={setName} returnKeyType="next"
+              value={name}
+              onChangeText={(t) => setName(t.trim())} // ← 즉시 trim
+              returnKeyType="next"
+              autoCapitalize="words"
             />
           </View>
 
@@ -126,8 +172,10 @@ const SignUpScreen = ({ navigation }) => {
             <TextInput
               style={styles.inputText}
               placeholder="이메일" placeholderTextColor="#8FB2E8"
-              value={email} onChangeText={setEmail}
+              value={email}
+              onChangeText={(t) => setEmail(t.trim())} // ← 즉시 trim
               keyboardType="email-address" autoCapitalize="none" returnKeyType="next"
+              autoComplete="email"
             />
           </View>
 
@@ -135,7 +183,11 @@ const SignUpScreen = ({ navigation }) => {
             <TextInput
               style={styles.inputText}
               placeholder="비밀번호" placeholderTextColor="#8FB2E8"
-              secureTextEntry value={password} onChangeText={setPassword} returnKeyType="next"
+              secureTextEntry
+              value={password}
+              onChangeText={(t) => setPassword(t.replace(/\s+/g, ''))} // ← 모든 공백 제거
+              returnKeyType="next"
+              autoComplete="password-new" maxLength={20}
             />
           </View>
 
@@ -143,7 +195,11 @@ const SignUpScreen = ({ navigation }) => {
             <TextInput
               style={styles.inputText}
               placeholder="비밀번호 확인" placeholderTextColor="#8FB2E8"
-              secureTextEntry value={confirmPassword} onChangeText={setConfirmPassword} returnKeyType="next"
+              secureTextEntry
+              value={confirmPassword}
+              onChangeText={(t) => setConfirmPassword(t.replace(/\s+/g, ''))} // ← 모든 공백 제거
+              returnKeyType="next"
+              autoComplete="password-new" maxLength={20}
             />
           </View>
 
@@ -151,7 +207,10 @@ const SignUpScreen = ({ navigation }) => {
             <TextInput
               style={styles.inputText}
               placeholder="전화번호 (010-xxxx-xxxx)" placeholderTextColor="#8FB2E8"
-              value={tel} onChangeText={setTel} keyboardType="phone-pad" returnKeyType="done"
+              value={tel}
+              onChangeText={(t) => setTel(t.trim())} // ← 즉시 trim
+              keyboardType="phone-pad" returnKeyType="done"
+              autoComplete="tel"
             />
           </View>
 
@@ -173,7 +232,7 @@ const SignUpScreen = ({ navigation }) => {
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity style={styles.cta} activeOpacity={0.9} onPress={handleSignUp}>
+          <TouchableOpacity style={styles.cta} activeOpacity={0.9} onPress={handleSignUp} disabled={loading}>
             <LinearGradient colors={['#0AA7F6', '#2E7BFF']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.ctaInner}>
               {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.ctaText}>회원 가입</Text>}
             </LinearGradient>

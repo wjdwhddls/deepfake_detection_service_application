@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Modal, TouchableOpacity, View, StyleSheet, NativeModules, NativeEventEmitter, DevSettings,
+  Image,
 } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -13,6 +14,7 @@ import io from 'socket.io-client';
 import { ThemeProvider } from './src/contexts/ThemeContext';
 import { checkPermissions } from './src/services/PhoneService';
 import { SERVER_URL } from './src/lib/config';
+import LogoImage from './src/assets/Detection.png';
 
 import HomeScreen from './src/screens/HomeScreen';
 import DashBoardScreen from './src/screens/DashBoardScreen';
@@ -34,6 +36,7 @@ import CallScreen from './src/screens/CallScreen';
 import InCallScreen from './src/screens/InCallScreen';
 import WarningScreen from './src/screens/WarningScreen';
 import useVoIPConnection from './src/services/useVoIPConnection';
+import WritePostScreen from './src/screens/WritePostScreen';
 
 const { DeepfakeDetector } = NativeModules || {};
 const deepfakeEvents = DeepfakeDetector ? new NativeEventEmitter(DeepfakeDetector) : null;
@@ -52,6 +55,7 @@ const DashBoardStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="DashBoardMain" component={DashBoardScreen} />
     <Stack.Screen name="PostDetail" component={PostDetailScreen} />
+    <Stack.Screen name="WritePost" component={WritePostScreen} options={{ headerShown: false }} />
   </Stack.Navigator>
 );
 
@@ -134,8 +138,21 @@ const MainTabNavigator = ({ socket, userPhoneNumber, setIsLoggedIn, onStartCall 
       },
       tabBarButton: (props) => {
         if (route.name !== 'Action') return <TouchableOpacity {...props} />;
+        // 중앙 고정 플로팅 버튼 (아이콘: shield)
         return (
-          <View style={{ position: 'absolute', alignItems: 'center', justifyContent: 'center', top: -30 }}>
+          <View
+            pointerEvents="box-none"
+            style={{
+              position: 'absolute',
+              bottom: 18,
+              left: '50%',
+              transform: [{ translateX: -33 }], // 66 / 2
+              width: 66,
+              height: 66,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
             <TouchableOpacity
               activeOpacity={0.9}
               onPress={() => navigation.navigate('Home')}
@@ -152,7 +169,7 @@ const MainTabNavigator = ({ socket, userPhoneNumber, setIsLoggedIn, onStartCall 
                 start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
                 style={{ flex: 1, borderRadius: 33, alignItems: 'center', justifyContent: 'center' }}
               >
-                <Icon name="mic" size={28} color={PALETTE.white} />
+                <Icon name="shield" size={28} color={PALETTE.white} />
               </LinearGradient>
             </TouchableOpacity>
           </View>
@@ -228,7 +245,7 @@ const App = () => {
     })();
   }, []);
 
-  // Dev Menu에서 수동 실행 메뉴 추가 (개발 중 편의)
+  // Dev Menu에서 수동 실행 메뉴 추가
   useEffect(() => {
     if (DeepfakeDetector?.debugSiameseWithRefs) {
       DevSettings.addMenuItem('Run Siamese Self-Test', async () => {
