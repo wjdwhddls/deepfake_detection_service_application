@@ -12,6 +12,8 @@
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
 		7C6CC981CF6213A579139484 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
+		8F5CCD2B1CD14CD0B0C70AB9 /* NotoSansKR-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D707BB47516D46939C401A67 /* NotoSansKR-Bold.ttf */; };
+		907F279AC9D947EA82C6633B /* NotoSansKR-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 6E215EFDB5E34C519206B7E1 /* NotoSansKR-Regular.ttf */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -25,6 +27,8 @@
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = deepfake_detection_service_application/AppDelegate.swift; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = deepfake_detection_service_application/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
+		D707BB47516D46939C401A67 /* NotoSansKR-Bold.ttf */ = {isa = PBXFileReference; name = "NotoSansKR-Bold.ttf"; path = "../src/assets/fonts/NotoSansKR-Bold.ttf"; sourceTree = "<group>"; fileEncoding = undefined; lastKnownFileType = unknown; explicitFileType = undefined; includeInIndex = 0; };
+		6E215EFDB5E34C519206B7E1 /* NotoSansKR-Regular.ttf */ = {isa = PBXFileReference; name = "NotoSansKR-Regular.ttf"; path = "../src/assets/fonts/NotoSansKR-Regular.ttf"; sourceTree = "<group>"; fileEncoding = undefined; lastKnownFileType = unknown; explicitFileType = undefined; includeInIndex = 0; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -75,6 +79,7 @@
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
 				BBD78D7AC51CEA395F1C20DB /* Pods */,
+				C93E4F9D86FA4B6DBC991AD0 /* Resources */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -97,6 +102,16 @@
 			);
 			path = Pods;
 			sourceTree = "<group>";
+		};
+		C93E4F9D86FA4B6DBC991AD0 /* Resources */ = {
+			isa = "PBXGroup";
+			children = (
+				D707BB47516D46939C401A67 /* NotoSansKR-Bold.ttf */,
+				6E215EFDB5E34C519206B7E1 /* NotoSansKR-Regular.ttf */,
+			);
+			name = Resources;
+			sourceTree = "<group>";
+			path = "";
 		};
 /* End PBXGroup section */
 
@@ -161,6 +176,8 @@
 				81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				7C6CC981CF6213A579139484 /* PrivacyInfo.xcprivacy in Resources */,
+				8F5CCD2B1CD14CD0B0C70AB9 /* NotoSansKR-Bold.ttf in Resources */,
+				907F279AC9D947EA82C6633B /* NotoSansKR-Regular.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
