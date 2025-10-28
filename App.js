@@ -34,9 +34,9 @@ import CallScreen from './src/screens/CallScreen';
 import InCallScreen from './src/screens/InCallScreen';
 import WarningScreen from './src/screens/WarningScreen';
 import useVoIPConnection from './src/services/useVoIPConnection';
+import WritePostScreen from './src/screens/WritePostScreen';
 
 const { DeepfakeDetector } = NativeModules || {};
-// 네이티브 모듈을 명시적으로 넣어 경고 제거 + 이벤트 수신
 const deepfakeEvents = new NativeEventEmitter(NativeModules.DeepfakeDetector || undefined);
 
 const Tab = createBottomTabNavigator();
@@ -53,6 +53,7 @@ const DashBoardStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="DashBoardMain" component={DashBoardScreen} />
     <Stack.Screen name="PostDetail" component={PostDetailScreen} />
+    <Stack.Screen name="WritePost" component={WritePostScreen} />
   </Stack.Navigator>
 );
 
@@ -134,8 +135,21 @@ const MainTabNavigator = ({ socket, userPhoneNumber, setIsLoggedIn, onStartCall 
       },
       tabBarButton: (props) => {
         if (route.name !== 'Action') return <TouchableOpacity {...props} />;
+        // 중앙 고정 플로팅 버튼
         return (
-          <View style={{ position: 'absolute', alignItems: 'center', justifyContent: 'center', top: -30 }}>
+          <View
+            pointerEvents="box-none"
+            style={{
+              position: 'absolute',
+              bottom: 18,
+              left: '50%',
+              transform: [{ translateX: -33 }],
+              width: 66,
+              height: 66,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
             <TouchableOpacity
               activeOpacity={0.9}
               onPress={() => navigation.navigate('Home')}
@@ -152,7 +166,7 @@ const MainTabNavigator = ({ socket, userPhoneNumber, setIsLoggedIn, onStartCall 
                 start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
                 style={{ flex: 1, borderRadius: 33, alignItems: 'center', justifyContent: 'center' }}
               >
-                <Icon name="mic" size={28} color={PALETTE.white} />
+                <Icon name="shield" size={28} color={PALETTE.white} />
               </LinearGradient>
             </TouchableOpacity>
           </View>
@@ -206,7 +220,7 @@ const App = () => {
   const fakeStreakRef = useRef(0);
   const realStreakRef = useRef(0);
 
-  // ✅ 최신 상태를 리스너에서 사용하기 위한 ref들
+  // 최신 상태를 소켓 리스너에서 안전하게 쓰기 위한 ref
   const stateRef = useRef({ callModalVisible, callState, isCaller });
   useEffect(() => {
     stateRef.current = { callModalVisible, callState, isCaller };
@@ -214,23 +228,27 @@ const App = () => {
 
   useEffect(() => { checkPermissions(); }, []);
 
-  // 모델 로드 + 간단 자가검증
+  // 모델 로드 + Dev 메뉴에 self-test 추가
   useEffect(() => {
     (async () => {
       try {
         if (DeepfakeDetector?.initModel) {
           await DeepfakeDetector.initModel();
           console.log('[App] Deepfake model initialized');
-          if (DeepfakeDetector?.debugSiameseWithRefs) {
-            await DeepfakeDetector.debugSiameseWithRefs();
-          }
         } else {
           console.log('[App] DeepfakeDetector native module not found');
         }
       } catch (e) {
-        console.warn('[App] Deepfake model init/debug failed:', e?.message || e);
+        console.warn('[App] Deepfake model init failed:', e?.message || e);
       }
     })();
+
+    if (DeepfakeDetector?.debugSiameseWithRefs) {
+      DevSettings.addMenuItem('Run Siamese Self-Test', async () => {
+        try { await DeepfakeDetector.debugSiameseWithRefs(); }
+        catch (e) { console.warn('[App] debugSiameseWithRefs error:', e?.message || e); }
+      });
+    }
   }, []);
 
   // 로그인 후 소켓 연결
@@ -260,10 +278,9 @@ const App = () => {
       handleRejectOrHangup();
     });
 
-    // ✅ 수신측: 송신측 verdict 수신 → 최신 상태(ref)로 판정
+    // 수신측: 송신측 verdict 수신 → UI 반영 (최신 상태 ref 사용)
     const onVerdict = ({ pFake, pReal, from, ts }) => {
       const { callModalVisible: vis, callState: st, isCaller: ic } = stateRef.current;
-      // 디버깅 로그
       console.log('[DF][rx]', { from, pFake, pReal, ts, vis, st, ic });
       if (!vis || st !== 'active' || ic) return;
 
@@ -341,7 +358,7 @@ const App = () => {
 
   const handleAccept = () => { setCallState('active'); acceptCall(); };
 
-  // ✅ 송신측: Mic 모니터 시작 → 네이티브 이벤트를 서버로 릴레이
+  // 송신측: Mic 모니터 시작 → 네이티브 이벤트를 서버로 릴레이
   useEffect(() => {
     const shouldStart =
       callState === 'active' &&

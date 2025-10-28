@@ -29,45 +29,34 @@ try {
   DeviceInfo = require('react-native-device-info');
 } catch {}
 
-/** ===== (추가) Document Picker 동적 로딩 (둘 중 설치된 것 사용) ===== */
-let DocumentPickerMod = null;
-try {
-  // 공식 패키지 우선
-  DocumentPickerMod = require('react-native-document-picker');
-} catch {}
-if (!DocumentPickerMod) {
-  try {
-    // 네가 처음 쓰던 패키지(있다면)
-    DocumentPickerMod = require('@react-native-documents/picker');
-  } catch {}
+/** ===== (변경) Document Picker: @react-native-documents/picker 고정 사용 (안전 로더) ===== */
+import * as DocumentsPicker from '@react-native-documents/picker';
+
+function resolveDocPick() {
+  // 다양한 번들 형태 대응
+  if (typeof DocumentsPicker?.pick === 'function') return DocumentsPicker.pick;
+  if (typeof DocumentsPicker?.default?.pick === 'function') return DocumentsPicker.default.pick;
+  if (typeof DocumentsPicker?.default === 'function') return DocumentsPicker.default; // default가 곧 pick
+  return null;
 }
 
 async function pickOneFile(opts = {}) {
-  if (!DocumentPickerMod) {
-    Alert.alert(
-      '문서 선택기 미설치',
-      '파일 선택 모듈이 없습니다. react-native-document-picker를 설치하세요.'
-    );
-    throw new Error('DocumentPicker not installed');
+  const pickFn = resolveDocPick();
+  if (!pickFn) {
+    Alert.alert('문서 선택기 오류', '@react-native-documents/picker의 pick()을 찾을 수 없습니다.');
+    throw new Error('No pick() export from @react-native-documents/picker');
   }
-
-  // react-native-document-picker(v9+) 형태 우선
-  if (typeof DocumentPickerMod.pickSingle === 'function') {
-    return await DocumentPickerMod.pickSingle({ ...opts });
+  try {
+    // @react-native-documents/picker 는 **배열**을 반환
+    const res = await pickFn({ mode: 'import', ...opts });
+    if (!Array.isArray(res) || res.length === 0) return null;
+    return res[0]; // { uri, name, mimeType, size, ... }
+  } catch (e) {
+    const msg = String(e?.message || e || '').toLowerCase();
+    if (msg.includes('cancel')) return null; // 사용자 취소
+    Alert.alert('문서 선택기 오류', '파일을 선택하는 중 문제가 발생했습니다.');
+    throw e;
   }
-  if (typeof DocumentPickerMod.pick === 'function') {
-    const res = await DocumentPickerMod.pick({ allowMultiSelection: false, ...opts });
-    return Array.isArray(res) ? res[0] : res;
-  }
-
-  // @react-native-documents/picker 형태 (API 동일 가정)
-  if (DocumentPickerMod?.pick) {
-    const res = await DocumentPickerMod.pick({ mode: 'import', ...opts });
-    return Array.isArray(res) ? res[0] : res;
-  }
-
-  Alert.alert('문서 선택기 오류', '지원되지 않는 DocumentPicker 인터페이스입니다.');
-  throw new Error('Unsupported DocumentPicker interface');
 }
 
 /** ===== 팔레트 ===== */
@@ -128,8 +117,21 @@ function normalizeResult(nativeRes) {
   };
 }
 
-/** Dev 전용 메트릭 로깅 (안전 버전: table/group 미사용, 순수 log) */
-async function logDevMetrics({ label = 'Detect', tStart, tEnd }) {
+/** ===== (추가) 에너지 추정 상수(옵션) ===== */
+const ENERGY_ALPHA_mJ_PER_MS = 2.0;   // 지연시간당 가중치
+const ENERGY_BETA_mJ_PER_KB  = 0.02;  // 전송량당 가중치
+
+/** ===== (추가) 숫자/분수 보정 유틸 ===== */
+const numOrUndef = (v) => (typeof v === 'number' && isFinite(v) ? v : undefined);
+const fracOrUndef = (v) => {
+  if (typeof v !== 'number' || !isFinite(v)) return undefined;
+  if (v > 1 && v <= 100) return v / 100;
+  if (v >= 0 && v <= 1) return v;
+  return undefined;
+};
+
+/** ===== Dev 전용 메트릭 로깅 (확장: 모든 지표를 한 줄 JSON으로) ===== */
+async function logDevMetrics({ label = 'Detect', tStart, tEnd, extra = {} }) {
   if (!__DEV__) return;
 
   const ms = Math.max(0, (tEnd ?? Date.now()) - (tStart ?? Date.now()));
@@ -163,13 +165,14 @@ async function logDevMetrics({ label = 'Detect', tStart, tEnd }) {
     cpuApp: cpu?.app ?? null,
     cpuSampleMs: cpu?.sampleMs ?? null,
     platform: Platform.OS,
+    ...extra, // ← bytesKB, energy, usedMemMB, inferMs, accuracy, f1, recall 등
   };
 
   try {
     const safe = JSON.parse(JSON.stringify(payload));
-    console.log(`[DEV][metrics]`, safe);
+    console.log('[DEV][metrics]', safe);
   } catch {
-    console.log(`[DEV][metrics]`, payload);
+    console.log('[DEV][metrics]', payload);
   }
 }
 
@@ -187,8 +190,7 @@ const EqualizerBackground = ({ styles, variant = 'center' }) => {
       ]);
       Animated.loop(seq).start();
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [vals]);
 
   const containerStyle = variant === 'center' ? styles.eqCenterContainer : styles.eqBottomContainer;
 
@@ -226,6 +228,35 @@ const HomeScreen = ({ navigation }) => {
   const pulse = useRef(new Animated.Value(0)).current;
   const uploadReveal = useRef(new Animated.Value(0)).current;
 
+  /** ===== (추가) 지표 상태/메모리 폴링 ===== */
+  const [metrics, setMetrics] = useState({
+    totalMs: 0,
+    avgTotalMs: 0,
+    samples: 0,
+    netMs: undefined,
+    inferMs: undefined,
+    usedMemMB: null,
+    bytesKB: undefined,
+    energy_mJ: undefined,
+    accuracy: undefined,
+    f1: undefined,
+    recall: undefined,
+  });
+  const memTimerRef = useRef(null);
+  const startMemPolling = () => {
+    stopMemPolling();
+    memTimerRef.current = setInterval(async () => {
+      try {
+        const used = await DeviceInfo?.getUsedMemory?.();
+        setMetrics((m) => ({ ...m, usedMemMB: typeof used === 'number' ? used / (1024 * 1024) : null }));
+      } catch { setMetrics((m) => ({ ...m, usedMemMB: null })); }
+    }, 1000);
+  };
+  const stopMemPolling = () => {
+    if (memTimerRef.current) { clearInterval(memTimerRef.current); memTimerRef.current = null; }
+  };
+  useEffect(() => () => stopMemPolling(), []);
+
   const initOnceRef = useRef(false);
   useEffect(() => {
     let mounted = true;
@@ -244,7 +275,7 @@ const HomeScreen = ({ navigation }) => {
     return () => { mounted = false; };
   }, []);
 
-  // 🔁 화면 포커스될 때 초기화: navigation listener 사용
+  // 🔁 화면 포커스될 때 초기화
   const backSubRef = useRef(null);
   useEffect(() => {
     const onFocus = () => {
@@ -305,7 +336,7 @@ const HomeScreen = ({ navigation }) => {
     }).start();
   };
 
-  // === 권한 요청: react-native-permissions 완전 제거, PermissionsAndroid만 사용 ===
+  // === 권한 요청: PermissionsAndroid만 사용 ===
   const requestFilePermissionIfNeeded = async () => {
     if (Platform.OS !== 'android') return true;
     const API = Number(Platform.Version) || 0;
@@ -351,6 +382,12 @@ const HomeScreen = ({ navigation }) => {
     try {
       setLoading(true);
       setSnapshot(null);
+      // 지표 초기화
+      setMetrics(m => ({
+        ...m,
+        bytesKB: undefined, netMs: undefined, inferMs: undefined,
+        energy_mJ: undefined, accuracy: undefined, f1: undefined, recall: undefined,
+      }));
 
       const permissionGranted = await requestFilePermissionIfNeeded();
       if (!permissionGranted) {
@@ -358,10 +395,8 @@ const HomeScreen = ({ navigation }) => {
         return;
       }
 
-      // ✅ 설치된 문서 선택기 사용
-      const picked = await pickOneFile({
-        // type: DocumentPicker.types.audio // (react-native-document-picker 사용 시 활성화 가능)
-      });
+      // 파일 선택
+      const picked = await pickOneFile({});
       if (!picked) return;
 
       if (!DeepfakeDetector || !DeepfakeDetector.detectFromFile) {
@@ -369,8 +404,18 @@ const HomeScreen = ({ navigation }) => {
         return;
       }
 
-      const mime = (picked?.type || picked?.mimeType || '').toLowerCase();
-      const name = (picked?.name || '').toLowerCase();
+      // 전송량(파일 크기) 추정 -> 에너지 계산에 사용
+      let bytesKB;
+      try {
+        const sizeFromPicker = typeof picked?.size === 'number' ? picked.size : undefined;
+        if (typeof sizeFromPicker === 'number') {
+          bytesKB = sizeFromPicker / 1024;
+        }
+      } catch {}
+      startMemPolling(); // 사용 메모리 폴링 시작
+
+      const mime = (picked?.type || picked?.mimeType || '').toLowerCase?.() ?? '';
+      const name = (picked?.name || '').toLowerCase?.() ?? '';
       const isWav = mime.includes('wav') || name.endsWith('.wav');
       if (!isWav) {
         Alert.alert('형식 안내', '현재는 WAV 파일만 지원합니다. (16kHz/mono 권장)');
@@ -381,18 +426,89 @@ const HomeScreen = ({ navigation }) => {
       await RNFS.copyFile(picked.uri, cachedPath);
       const fileUri = Platform.OS === 'android' ? `file://${cachedPath}` : cachedPath;
 
+      // 파일 시스템에서 크기 재확인
+      try {
+        const st = await RNFS.stat(cachedPath);
+        if (typeof st?.size === 'number') bytesKB = st.size / 1024;
+      } catch {}
+
+      // 온디바이스 추론
       const nativeRes = await DeepfakeDetector.detectFromFile(fileUri);
       const shot = normalizeResult(nativeRes);
+
+      // 네이티브가 줄 수 있는 시간/지표 수집
+      const inferMs = numOrUndef(nativeRes?.inferMs ?? nativeRes?.inferenceMs);
+      const accuracy = fracOrUndef(nativeRes?.accuracy ?? nativeRes?.acc);
+      const f1       = fracOrUndef(nativeRes?.f1 ?? nativeRes?.f1_score);
+      const recall   = fracOrUndef(nativeRes?.recall ?? nativeRes?.sensitivity);
+
       setSnapshot(shot);
       openResultSheet();
+
+      // 총 지연
+      const t1 = (global.performance?.now?.() ?? Date.now());
+      const totalMs = t1 - t0;
+
+      // (옵션) 에너지 추정
+      const energy_mJ =
+        typeof bytesKB === 'number'
+          ? totalMs * ENERGY_ALPHA_mJ_PER_MS + bytesKB * ENERGY_BETA_mJ_PER_KB
+          : totalMs * ENERGY_ALPHA_mJ_PER_MS;
+
+      // 평균 갱신 + 지표 반영
+      setMetrics(m => {
+        const n = m.samples + 1;
+        const avg = (m.avgTotalMs * m.samples + totalMs) / n;
+        return {
+          ...m,
+          samples: n,
+          totalMs,
+          avgTotalMs: avg,
+          netMs: undefined,
+          inferMs,
+          bytesKB,
+          energy_mJ,
+          accuracy,
+          f1,
+          recall,
+        };
+      });
+
+      // DevTools 로그(모든 지표 포함)
+      await logDevMetrics({
+        label: 'Detect',
+        tStart: t0,
+        tEnd: t1,
+        extra: {
+          totalMs: Math.round(totalMs),
+          netMs: undefined,
+          inferMs: typeof inferMs === 'number' ? Math.round(inferMs) : null,
+          bytesKB: typeof bytesKB === 'number' ? Math.round(bytesKB) : null,
+          energy_mJ: typeof energy_mJ === 'number' ? Math.round(energy_mJ) : null,
+          usedMemMB: null, // 폴링 타이밍상 바로 못 읽을 수 있어 null 허용
+          accuracy, f1, recall,
+          verdict: shot?.verdict?.key ?? null,
+        },
+      });
     } catch (e) {
       console.log('온디바이스 분석 오류:', e?.message || String(e));
       Alert.alert('오류', '분석 중 문제가 발생했습니다.');
     } finally {
+      stopMemPolling();
       setLoading(false);
       setShowUploadButton(true);
-      const t1 = (global.performance?.now?.() ?? Date.now());
-      logDevMetrics({ label: 'Detect', tStart: t0, tEnd: t1 });
+
+      // 마지막 메모리 스냅샷 한 번 더 기록 + 보충 로그
+      try {
+        const used = await DeviceInfo?.getUsedMemory?.();
+        const usedMemMB = typeof used === 'number' ? used / (1024 * 1024) : null;
+        setMetrics(m => ({ ...m, usedMemMB }));
+        console.log('[DEV][metrics:mem-final]', {
+          usedMemMB: usedMemMB != null ? Number(usedMemMB.toFixed(1)) : null,
+        });
+      } catch {
+        setMetrics(m => ({ ...m, usedMemMB: null }));
+      }
     }
   };
 
@@ -408,7 +524,7 @@ const HomeScreen = ({ navigation }) => {
     if (!snapshot) return;
     closeResultSheet();
     // ✅ 고정 경로
-    navigation?.navigate?.('DetectDetail', { result: snapshot });
+    navigation?.navigate?.('DetectDetail', { result: snapshot, metrics });
   };
 
   const styles = getStyles();
