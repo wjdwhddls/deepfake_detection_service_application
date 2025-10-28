@@ -1,41 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
     package="com.deepfake_detection_service_application">
 
-    <!-- 네트워크/오디오/파일 권한 -->
+    <!-- 네트워크/오디오 권한 -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
-    <!-- Android 13+에서 미디어 권한 분리 -->
+    <!-- 파일 디코딩이 필요하면 (선택) -->
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
-
-    <!-- 구버전 호환을 위한 저장소 권한 (targetApi로 범위 한정) -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:targetApi="28" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" tools:targetApi="28" />
-
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="28"/>
     <uses-permission android:name="android.permission.VIBRATE" />
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
-
-    <!-- (선택) 전화 관련 – 실제 필요 시에만 유지 권장 -->
-    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
-    <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
-    <uses-permission android:name="android.permission.CALL_PHONE" />
-    <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
-    <uses-permission android:name="android.permission.PROCESS_OUTGOING_CALLS" tools:targetApi="28" />
-    <uses-permission android:name="android.permission.READ_CONTACTS" />
-    <uses-permission android:name="android.permission.READ_CALL_LOG" />
-
-    <!-- (선택) 문서 피커 접근 안정성 향상용 -->
-    <!-- 필요 없으면 제거 가능 -->
-    <queries>
-        <intent>
-            <action android:name="android.intent.action.OPEN_DOCUMENT" />
-            <category android:name="android.intent.category.DEFAULT" />
-        </intent>
-    </queries>
 
     <application
         android:name=".MainApplication"
@@ -45,11 +20,8 @@
         android:allowBackup="false"
         android:supportsRtl="true"
         android:theme="@style/AppTheme"
-        android:usesCleartextTraffic="true"
-        android:allowAudioPlaybackCapture="true"
-        android:networkSecurityConfig="@xml/network_security_config">
+        android:usesCleartextTraffic="true">
 
-        <!-- 런처 액티비티 -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -57,44 +29,11 @@
             android:windowSoftInputMode="adjustResize"
             android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode">
             <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
 
-        <!-- 통화 오버레이 액티비티 (런처 아님) -->
-        <activity
-            android:name=".Call.CallOverlayActivity"
-            android:exported="true"
-            android:launchMode="singleTop"
-            android:screenOrientation="portrait"
-            android:windowSoftInputMode="stateAlwaysHidden"
-            android:theme="@android:style/Theme.Translucent.NoTitleBar"
-            tools:ignore="UnusedAttribute">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-        </activity>
-
-        <!-- ✅ Playback capture 권한 UI용: 패키지 풀네임로 등록 (중요) -->
-        <activity
-            android:name="com.deepvoice.PlaybackCaptureActivity"
-            android:exported="false"
-            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
-
-        <service
-            android:name=".Call.CallBackgroundMessaging"
-            android:exported="false" />
-
-        <service
-            android:name=".Call.CallScreeningServiceImpl"
-            android:exported="true"
-            android:permission="android.permission.BIND_SCREENING_SERVICE">
-            <intent-filter>
-                <action android:name="android.telecom.CallScreeningService" />
-            </intent-filter>
-        </service>
-
+        <!-- ⚠️ PlaybackCaptureService 선언/권한은 Mic 방식에선 제거 -->
     </application>
 </manifest>

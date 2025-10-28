@@ -2,7 +2,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Modal, TouchableOpacity, View, StyleSheet, NativeModules, NativeEventEmitter, DevSettings,
-  Image,
 } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -14,7 +13,6 @@ import io from 'socket.io-client';
 import { ThemeProvider } from './src/contexts/ThemeContext';
 import { checkPermissions } from './src/services/PhoneService';
 import { SERVER_URL } from './src/lib/config';
-import LogoImage from './src/assets/Detection.png';
 
 import HomeScreen from './src/screens/HomeScreen';
 import DashBoardScreen from './src/screens/DashBoardScreen';
@@ -39,7 +37,7 @@ import useVoIPConnection from './src/services/useVoIPConnection';
 import WritePostScreen from './src/screens/WritePostScreen';
 
 const { DeepfakeDetector } = NativeModules || {};
-const deepfakeEvents = DeepfakeDetector ? new NativeEventEmitter(DeepfakeDetector) : null;
+const deepfakeEvents = new NativeEventEmitter(NativeModules.DeepfakeDetector || undefined);
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -55,7 +53,7 @@ const DashBoardStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="DashBoardMain" component={DashBoardScreen} />
     <Stack.Screen name="PostDetail" component={PostDetailScreen} />
-    <Stack.Screen name="WritePost" component={WritePostScreen} options={{ headerShown: false }} />
+    <Stack.Screen name="WritePost" component={WritePostScreen} />
   </Stack.Navigator>
 );
 
@@ -69,7 +67,6 @@ const ProfileStack = ({ setIsLoggedIn }) => (
     <Stack.Screen name="Info" component={InfoScreen} />
     <Stack.Screen name="FAQ" component={FAQScreen} />
     <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
-    <Stack.Screen name="Logout" component={LogoutScreen} />
   </Stack.Navigator>
 );
 
@@ -138,7 +135,7 @@ const MainTabNavigator = ({ socket, userPhoneNumber, setIsLoggedIn, onStartCall 
       },
       tabBarButton: (props) => {
         if (route.name !== 'Action') return <TouchableOpacity {...props} />;
-        // 중앙 고정 플로팅 버튼 (아이콘: shield)
+        // 중앙 고정 플로팅 버튼
         return (
           <View
             pointerEvents="box-none"
@@ -146,7 +143,7 @@ const MainTabNavigator = ({ socket, userPhoneNumber, setIsLoggedIn, onStartCall 
               position: 'absolute',
               bottom: 18,
               left: '50%',
-              transform: [{ translateX: -33 }], // 66 / 2
+              transform: [{ translateX: -33 }],
               width: 66,
               height: 66,
               alignItems: 'center',
@@ -222,31 +219,30 @@ const App = () => {
 
   const fakeStreakRef = useRef(0);
   const realStreakRef = useRef(0);
-  const warningDelayRef = useRef(null);
+
+  // 최신 상태를 소켓 리스너에서 안전하게 쓰기 위한 ref
+  const stateRef = useRef({ callModalVisible, callState, isCaller });
+  useEffect(() => {
+    stateRef.current = { callModalVisible, callState, isCaller };
+  }, [callModalVisible, callState, isCaller]);
 
   useEffect(() => { checkPermissions(); }, []);
 
-  // 앱 레벨에서 1회 모델 로드 + 시암 자가검증
+  // 모델 로드 + Dev 메뉴에 self-test 추가
   useEffect(() => {
     (async () => {
       try {
         if (DeepfakeDetector?.initModel) {
           await DeepfakeDetector.initModel();
           console.log('[App] Deepfake model initialized');
-          if (DeepfakeDetector?.debugSiameseWithRefs) {
-            await DeepfakeDetector.debugSiameseWithRefs();
-          }
         } else {
           console.log('[App] DeepfakeDetector native module not found');
         }
       } catch (e) {
-        console.warn('[App] Deepfake model init/debug failed:', e?.message || e);
+        console.warn('[App] Deepfake model init failed:', e?.message || e);
       }
     })();
-  }, []);
 
-  // Dev Menu에서 수동 실행 메뉴 추가
-  useEffect(() => {
     if (DeepfakeDetector?.debugSiameseWithRefs) {
       DevSettings.addMenuItem('Run Siamese Self-Test', async () => {
         try { await DeepfakeDetector.debugSiameseWithRefs(); }
@@ -255,29 +251,7 @@ const App = () => {
     }
   }, []);
 
-  // 이벤트로 경고 제어
-  useEffect(() => {
-    if (!deepfakeEvents) return;
-    const onVerdict = (p) => {
-      if (!callModalVisible || callState !== 'active' || isCaller) return;
-      if (p.decision === 'fake') {
-        fakeStreakRef.current += 1; realStreakRef.current = 0;
-        if (fakeStreakRef.current >= 2) setShowWarning(true);
-      } else {
-        realStreakRef.current += 1; fakeStreakRef.current = 0;
-        if (realStreakRef.current >= 3 && showWarning) setShowWarning(false);
-        if (warningDelayRef.current) { clearTimeout(warningDelayRef.current); warningDelayRef.current = null; }
-      }
-    };
-    const sub = deepfakeEvents.addListener('DeepfakeVerdict', onVerdict);
-    return () => { sub.remove(); if (warningDelayRef.current) { clearTimeout(warningDelayRef.current); warningDelayRef.current = null; } };
-  }, [callModalVisible, callState, isCaller, showWarning]);
-
-  const resetVerdictState = () => {
-    fakeStreakRef.current = 0; realStreakRef.current = 0;
-    if (warningDelayRef.current) { clearTimeout(warningDelayRef.current); warningDelayRef.current = null; }
-  };
-
+  // 로그인 후 소켓 연결
   const onLoginSuccess = (phoneNumber) => {
     setUserPhoneNumber(phoneNumber);
     setIsLoggedIn(true);
@@ -287,6 +261,7 @@ const App = () => {
       console.log('[Socket] Connected');
       webSocket.emit('register-user', { phoneNumber });
     });
+
     webSocket.on('call', ({ from, number, name }) => {
       setRemotePeerId(from);
       setCallPeer({ name, number });
@@ -294,23 +269,36 @@ const App = () => {
       setCallModalVisible(true);
       setIsCaller(false);
     });
+
     webSocket.on('call-ack', ({ toSocketId }) => {
       setRemotePeerId(toSocketId);
     });
+
     webSocket.on('call-ended', () => {
       handleRejectOrHangup();
     });
-    setSocket(webSocket);
 
-    (async () => {
-      try {
-        await DeepfakeDetector?.requestPlaybackCapture?.();
-      } catch (e) {
-        console.warn('[Deepfake] capture request failed:', e?.message || e);
+    // 수신측: 송신측 verdict 수신 → UI 반영 (최신 상태 ref 사용)
+    const onVerdict = ({ pFake, pReal, from, ts }) => {
+      const { callModalVisible: vis, callState: st, isCaller: ic } = stateRef.current;
+      console.log('[DF][rx]', { from, pFake, pReal, ts, vis, st, ic });
+      if (!vis || st !== 'active' || ic) return;
+
+      const isFake = pFake > pReal + 0.05;
+      if (isFake) {
+        fakeStreakRef.current += 1; realStreakRef.current = 0;
+        if (fakeStreakRef.current >= 2) setShowWarning(true);
+      } else {
+        realStreakRef.current += 1; fakeStreakRef.current = 0;
+        if (realStreakRef.current >= 3 && showWarning) setShowWarning(false);
       }
-    })();
+    };
+    webSocket.on('deepfake-verdict', onVerdict);
+
+    setSocket(webSocket);
   };
 
+  // 로그아웃/세션 종료 시 정리
   useEffect(() => {
     if (!isLoggedIn && socket) {
       socket.disconnect();
@@ -324,8 +312,7 @@ const App = () => {
       setRemoteStreamExists(false);
       setRemoteAudioTrackId(null);
       setShowWarning(false);
-      resetVerdictState();
-      try { DeepfakeDetector?.stopStreamMonitor?.(); } catch {}
+      try { DeepfakeDetector?.stopMicMonitor?.(); } catch {}
     }
   }, [isLoggedIn]);
 
@@ -341,15 +328,24 @@ const App = () => {
 
   const handleRejectOrHangup = () => {
     if (socket && remotePeerId) socket.emit('hangup', { to: remotePeerId, from: userPhoneNumber });
-    setCallState('ended'); setCallModalVisible(false); setRemotePeerId(null); setIsCaller(false);
-    setCallPeer({ name: '', number: '' }); setRemoteStreamExists(false); setRemoteAudioTrackId(null); setShowWarning(false);
-    resetVerdictState();
-    try { DeepfakeDetector?.stopStreamMonitor?.(); } catch (e) { console.warn('[App] stopStreamMonitor error:', e?.message || e); }
+    setCallState('ended');
+    setCallModalVisible(false);
+    setRemotePeerId(null);
+    setIsCaller(false);
+    setCallPeer({ name: '', number: '' });
+    setRemoteStreamExists(false);
+    setRemoteAudioTrackId(null);
+    setShowWarning(false);
+    try { DeepfakeDetector?.stopMicMonitor?.(); } catch {}
   };
 
+  // WebRTC 연결
   const { acceptCall } = useVoIPConnection({
     enabled: callModalVisible && !!remotePeerId && (isCaller || callState === 'active'),
-    remotePeerId, socket, isCaller, onRemoteStream: (stream) => {
+    remotePeerId,
+    socket,
+    isCaller,
+    onRemoteStream: (stream) => {
       if (stream) {
         setRemoteStreamExists(true);
         setCallState('active');
@@ -362,16 +358,49 @@ const App = () => {
 
   const handleAccept = () => { setCallState('active'); acceptCall(); };
 
+  // 송신측: Mic 모니터 시작 → 네이티브 이벤트를 서버로 릴레이
   useEffect(() => {
-    const canStart = callState === 'active' && callModalVisible && remoteAudioTrackId && DeepfakeDetector?.startStreamMonitor;
-    if (canStart) {
+    const shouldStart =
+      callState === 'active' &&
+      callModalVisible &&
+      isCaller &&
+      !!remotePeerId &&
+      socket?.connected &&
+      DeepfakeDetector?.startMicMonitor;
+
+    let sub;
+    if (shouldStart) {
       (async () => {
-        try { await DeepfakeDetector.startStreamMonitor(remoteAudioTrackId, { windowMs: 2000 }); }
-        catch (e) { console.warn('[App] startStreamMonitor failed:', e?.message || e); }
+        try {
+          console.log('[App] startMicMonitor() 호출');
+          await DeepfakeDetector.startMicMonitor({ windowMs: 1000, hopMs: 500 });
+          sub = deepfakeEvents.addListener('DeepfakeRealtime', (p) => {
+            // p: { pFake, pReal, winSec, hopSec, label, timestamp }
+            const payload = {
+              to: remotePeerId,
+              callId: remotePeerId,
+              pFake: p.pFake,
+              pReal: p.pReal,
+              ts: Date.now(),
+            };
+            console.log('[DF][tx]', payload);
+            try {
+              socket?.emit('deepfake-verdict', payload);
+            } catch (e) {
+              console.warn('[DF][tx] emit failed:', e?.message || e);
+            }
+          });
+        } catch (e) {
+          console.warn('[App] startMicMonitor failed:', e?.message || e);
+        }
       })();
     }
-    return () => { try { DeepfakeDetector?.stopStreamMonitor?.(); } catch (e) {} };
-  }, [callState, callModalVisible, remoteAudioTrackId]);
+
+    return () => {
+      if (sub) sub.remove();
+      try { DeepfakeDetector?.stopMicMonitor?.(); } catch {}
+    };
+  }, [callState, callModalVisible, isCaller, remotePeerId, socket?.connected]);
 
   return (
     <ThemeProvider>
@@ -390,12 +419,19 @@ const App = () => {
           {callState === 'active' && !!callPeer?.number ? (
             <>
               <InCallScreen peer={callPeer} onHangup={handleRejectOrHangup} />
-              <WarningScreen visible={showWarning} onClose={() => setShowWarning(false)} onHangup={handleRejectOrHangup} />
+              <WarningScreen
+                visible={showWarning}
+                onClose={() => setShowWarning(false)}
+                onHangup={handleRejectOrHangup}
+              />
             </>
           ) : (
             <CallScreen
-              callState={callState} peer={callPeer}
-              onAccept={handleAccept} onReject={handleRejectOrHangup} onHangup={handleRejectOrHangup}
+              callState={callState}
+              peer={callPeer}
+              onAccept={handleAccept}
+              onReject={handleRejectOrHangup}
+              onHangup={handleRejectOrHangup}
               remoteStreamExists={remoteStreamExists}
             />
           )}
