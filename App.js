@@ -217,7 +217,7 @@ const App = () => {
   const [showWarning, setShowWarning] = useState(false);
   const [remoteAudioTrackId, setRemoteAudioTrackId] = useState(null);
 
-  const fakeStreakRef = useRef(0);
+  // ✅ fakeStreakRef 제거 (한 번만 가짜 판정돼도 경고)
   const realStreakRef = useRef(0);
 
   // 최신 상태를 소켓 리스너에서 안전하게 쓰기 위한 ref
@@ -278,19 +278,23 @@ const App = () => {
       handleRejectOrHangup();
     });
 
-    // 수신측: 송신측 verdict 수신 → UI 반영 (최신 상태 ref 사용)
+    // 수신측: 송신측 verdict 수신 → UI 반영 (한 번만 가짜면 경고)
     const onVerdict = ({ pFake, pReal, from, ts }) => {
       const { callModalVisible: vis, callState: st, isCaller: ic } = stateRef.current;
       console.log('[DF][rx]', { from, pFake, pReal, ts, vis, st, ic });
       if (!vis || st !== 'active' || ic) return;
 
-      const isFake = pFake > 0.6;
+      const isFake = pFake > 0.6; // 임계값 필요시 조정
       if (isFake) {
-        fakeStreakRef.current += 1; realStreakRef.current = 0;
-        if (fakeStreakRef.current >= 2) setShowWarning(true);
+        setShowWarning(true);      // ✅ 즉시 경고 표시
+        realStreakRef.current = 0; // 실음성 카운터 리셋
       } else {
-        realStreakRef.current += 1; fakeStreakRef.current = 0;
-        if (realStreakRef.current >= 3 && showWarning) setShowWarning(false);
+        // 연속 실음성 3회면 자동 해제 (자동 해제를 원치 않으면 이 블록을 제거)
+        realStreakRef.current += 1;
+        if (realStreakRef.current >= 3) {
+          setShowWarning(false);
+          realStreakRef.current = 0;
+        }
       }
     };
     webSocket.on('deepfake-verdict', onVerdict);
