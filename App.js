@@ -284,7 +284,7 @@ const App = () => {
       console.log('[DF][rx]', { from, pFake, pReal, ts, vis, st, ic });
       if (!vis || st !== 'active' || ic) return;
 
-      const isFake = pFake > pReal + 0.05;
+      const isFake = pFake > 0.6;
       if (isFake) {
         fakeStreakRef.current += 1; realStreakRef.current = 0;
         if (fakeStreakRef.current >= 2) setShowWarning(true);
@@ -373,7 +373,7 @@ const App = () => {
       (async () => {
         try {
           console.log('[App] startMicMonitor() 호출');
-          await DeepfakeDetector.startMicMonitor({ windowMs: 1000, hopMs: 500 });
+          await DeepfakeDetector.startMicMonitor({ windowMs: 3000, hopMs: 1000 });
           sub = deepfakeEvents.addListener('DeepfakeRealtime', (p) => {
             // p: { pFake, pReal, winSec, hopSec, label, timestamp }
             const payload = {
